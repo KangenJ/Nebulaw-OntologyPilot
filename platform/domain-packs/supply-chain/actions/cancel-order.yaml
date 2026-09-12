@@ -1,0 +1,29 @@
+# actions/cancel-order.yaml
+action: CancelOrder
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "order.status == 'DRAFT' || order.status == 'SUBMITTED' || order.status == 'CONFIRMED'"
+    error: "Only orders in DRAFT, SUBMITTED, or CONFIRMED status can be cancelled"
+  - expr: "actor.hasRole('procurement_manager') || actor.hasRole('supply_chain_admin')"
+    error: "Only procurement managers or supply chain admins can cancel orders"
+
+effects:
+  - type: updateObject
+    target: "order"
+    set:
+      status: "CANCELLED"
+
+sideEffects:
+  - name: emitOrderCancelledEvent
+    type: event
+    config:
+      type: "supply.chain.order.cancelled"
+      data:
+        orderNumber: "order.orderNumber"
+        previousStatus: "order.status"
+        reason: "params.reason"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

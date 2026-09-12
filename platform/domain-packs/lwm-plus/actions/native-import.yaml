@@ -1,0 +1,53 @@
+action: NativeImportMatter
+version: 1
+reversible: false
+preconditions:
+  - expr: "actor.hasRole('investigator')"
+    error: "Import requires investigator"
+  - expr: "params.currentState in ['EVIDENCE_COMPLETE', 'NOTICE_RECEIVED', 'CLAIM_RECEIVED']"
+    error: "Unsupported demo state"
+effects:
+  - type: createObject
+    objectType: Matter
+    properties:
+      workspaceKey: lwm-demo
+      matterNumber: params.matterNumber
+      title: params.title
+      jurisdiction: params.jurisdiction
+      currentState: params.currentState
+      status: NEW
+      riskBand: MEDIUM
+      owner: actor.id
+      openedAt: now
+  - type: createObject
+    objectType: Observation
+    properties:
+      workspaceKey: lwm-demo
+      observationNumber: params.commandKey
+      title: params.title
+      kind: DOCUMENT
+      source: params.source
+      summary: params.evidence
+      confidence: "0"
+      verified: "false"
+      recordedBy: actor.id
+      observedAt: now
+  - type: createLink
+    linkType: MatterObservation
+    from: matter
+    to: observation
+    properties:
+      linkedAt: now
+  - type: createObject
+    objectType: NativeCommandReceipt
+    properties:
+      commandKey: params.commandKey
+      commandHash: params.commandHash
+      actorId: actor.id
+      actionName: NativeImportMatter
+      resultType: Matter
+      resultId: matter._id
+      traceId: params.traceId
+      createdAt: now
+
+sideEffects: []

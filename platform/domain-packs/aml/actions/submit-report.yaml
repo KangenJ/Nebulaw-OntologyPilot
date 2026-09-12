@@ -1,0 +1,46 @@
+# actions/submit-report.yaml
+action: SubmitReport
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "sar.status == 'DRAFT'"
+    error: "Only draft SARs can be submitted"
+  - expr: "actor.hasRole('bsa_officer')"
+    error: "Only BSA officers can submit SARs to the regulator"
+
+effects:
+  - type: updateObject
+    target: "sar"
+    set:
+      status: "SUBMITTED"
+
+  - type: updateObject
+    target: "investigationCase"
+    set:
+      status: "CLOSED_SAR_FILED"
+      closeDate: "now"
+
+sideEffects:
+  - name: emitSarSubmittedEvent
+    type: event
+    config:
+      type: "aml.sar.submitted"
+      data:
+        sarNumber: "sar.sarNumber"
+        caseNumber: "investigationCase.caseNumber"
+        amount: "sar.amount"
+
+  - name: notifyRegulatorySystem
+    type: webhook
+    config:
+      url: "${REGULATORY_WEBHOOK_URL}"
+      method: POST
+      body:
+        sarNumber: "sar.sarNumber"
+        filingDate: "sar.filingDate"
+        reportingEntity: "sar.reportingEntity"
+    retries: 5
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

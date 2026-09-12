@@ -1,0 +1,13 @@
+action: ActivateWidget
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "widget.status == 'INACTIVE'"
+    error: "Widget must be inactive to activate"
+
+effects:
+  - type: updateObject
+    target: "widget"
+    set:
+      status: "ACTIVE"

@@ -1,0 +1,45 @@
+.git
+.github
+.avril
+.claude
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+**/dist
+# Go CEL sidecar binary — committed ~22MB artifact that was being copied into
+# every Node image. The cel-evaluator's own image rebuilds it from source, so
+# the binary is never needed in any context. NOTE: ignore only the binary, NOT
+# the whole packages/cel-evaluator dir — the TS actions package loads
+# proto/cel_service.proto at runtime (CelClient.defaultProtoPath resolves
+# ../../../cel-evaluator/proto/cel_service.proto), so that proto must remain in
+# the TS service image contexts.
+packages/cel-evaluator/cel-evaluator
+**/*.tsbuildinfo
+**/*.test.ts
+**/__tests__
+**/coverage
+# Exclude tests/ and tools/ source — only package.json is needed in Docker so
+# pnpm sees the full workspace and --frozen-lockfile works.
+tests/*/src
+tests/*/.turbo
+tests/*/.gitkeep
+tests/*/*.ts
+tools/*/src
+tools/*/.turbo
+tools/*/.gitkeep
+tools/*/*.ts
+docs/
+*.md
+LICENSE
+.turbo
+.vscode
+.idea
+deploy/
+var/
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/local-access.json
+**/auth.json

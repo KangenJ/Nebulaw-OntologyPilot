@@ -1,0 +1,51 @@
+# actions/register-patient.yaml
+#
+# Governed patient registration — the ED-arrival creation path. There is no
+# existing object to ReBAC-authorize against pre-creation, so authorization is
+# by role claim (CEL); the platform's SecurityLayer allows object-less actions
+# and defers to these preconditions. Consent-on-register is default-on with an
+# opt-out (consent: false) so an unconsented patient can still be created for
+# the consent-denial demo.
+action: RegisterPatient
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "actor.hasRole('receptionist') || actor.hasRole('clinician') || actor.hasRole('nurse_in_charge')"
+    error: "Insufficient role to register a patient"
+
+effects:
+  - type: createObject
+    objectType: "Patient"
+    properties:
+      name: "params.name"
+      # Structured-name components (v0.2.0 B2). Optional — absent when a caller
+      # supplies only the display name; projected to FHIR/CDM when present.
+      family: "params.family"
+      given: "params.given"
+      dateOfBirth: "params.dateOfBirth"
+      nhsNumber: "params.nhsNumber"
+      status: "DISCHARGED"
+      triageCategory: "params.triageCategory"
+      presentingComplaint: "params.presentingComplaint"
+
+  # Record DIRECT_CARE consent for the newly created patient unless opted out.
+  # Terminal effect: consent is recorded outside the SPI transaction.
+  - type: recordConsent
+    subject: "patient"
+    purpose: "DIRECT_CARE"
+    decision: "GRANT"
+    evidence: "'Recorded at registration'"
+    condition: "!(has(params.consent) && params.consent == false)"
+
+sideEffects:
+  - name: emitRegistrationEvent
+    type: event
+    config:
+      type: "nhs.acute.patient.registered"
+      data:
+        patientId: "patient.id"
+        triageCategory: "params.triageCategory"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

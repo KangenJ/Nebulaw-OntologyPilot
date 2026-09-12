@@ -1,0 +1,18 @@
+# Supply Chain Domain Pack — InventoryRecord ObjectType
+#
+# product and facility are implicit reference fields (foreign keys).
+# Per the InventoryOf/InventoryAt link type declarations in links.odl,
+# graph-based traversal is available when links are populated by the
+# link-sync pipeline.
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+type InventoryRecord @objectType {
+  id: ID! @primary
+  quantity: Int! @constraint(expr: "value >= 0")
+  reservedQuantity: Int! @constraint(expr: "value >= 0")
+  stockLevel: StockLevel!
+  lastCountDate: DateTime
+  product: Product!
+  facility: Facility!
+}

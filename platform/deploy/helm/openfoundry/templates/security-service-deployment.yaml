@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-security-service
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: security-service
+spec:
+  replicas: {{ .Values.securityService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openfoundry.selectorLabels" (dict "name" "security-service" "release" .Release.Name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openfoundry.selectorLabels" (dict "name" "security-service" "release" .Release.Name) | nindent 8 }}
+        app.kubernetes.io/component: security-service
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "openfoundry.serviceAccountName" . }}
+      {{/* HELM-07: Security context for all pods */}}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: security-service
+          image: {{ include "openfoundry.image" (dict "global" .Values.image "svc" .Values.securityService.image "name" "security") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{/* HELM-07: Container security context */}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: {{ .Values.securityService.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: {{ .Values.securityService.port | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: security-service
+            - name: POSTGRES_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.postgres.existingSecret }}
+                  key: {{ .Values.storage.postgres.secretKeys.username }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.postgres.existingSecret }}
+                  key: {{ .Values.storage.postgres.secretKeys.password }}
+            - name: POSTGRES_URL
+              value: {{ include "openfoundry.postgresUrl" . | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "openfoundry.fullname" . }}-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.securityService.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

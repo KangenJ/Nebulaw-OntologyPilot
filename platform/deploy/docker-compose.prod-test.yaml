@@ -1,0 +1,13 @@
+# Override that runs the api-gateway in NODE_ENV=production so real OIDC
+# (Keycloak) + OpenFGA enforcement are exercised end-to-end (security E2E).
+# OIDC_ISSUER matches the external token `iss` (KC_HOSTNAME_STRICT=false);
+# OIDC_JWKS_URI is the in-cluster certs URL the gateway can actually reach.
+services:
+  api-gateway:
+    environment:
+      NODE_ENV: production
+      OIDC_ISSUER: "http://localhost:8180/auth/realms/openfoundry"
+      OIDC_CLIENT_ID: openfoundry
+      OIDC_JWKS_URI: "http://keycloak:8080/auth/realms/openfoundry/protocol/openid-connect/certs"
+      OPENFGA_STORE_ID: "${OPENFGA_STORE_ID:?set OPENFGA_STORE_ID}"
+      FHIR_BASE_URL: "http://localhost:4000/fhir"

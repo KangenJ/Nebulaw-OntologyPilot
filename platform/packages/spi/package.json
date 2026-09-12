@@ -1,0 +1,27 @@
+{
+  "name": "@openfoundry/spi",
+  "version": "0.1.0",
+  "description": "Open Foundry Storage Provider Interface - core type definitions",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist coverage"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}

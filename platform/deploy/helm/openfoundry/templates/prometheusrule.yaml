@@ -1,0 +1,59 @@
+{{/*
+HighErrorRate, HighLatency, and StorageUnhealthy alerts reference application-level
+metrics (http_requests_total, http_request_duration_seconds_bucket,
+openfoundry_storage_healthy) exposed by prom-client on GET /metrics.
+PodRestarting uses kube-state-metrics (available out of the box).
+See values.yaml monitoring.prometheusRules.enabled (default: false).
+*/}}
+{{- if .Values.monitoring.prometheusRules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "openfoundry.fullname" . }}
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: openfoundry.rules
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_requests_total{service="{{ include "openfoundry.fullname" . }}-api-gateway", status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{service="{{ include "openfoundry.fullname" . }}-api-gateway"}[5m]))
+            > 0.01
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High 5xx error rate on {{ include "openfoundry.fullname" . }}"
+            description: "More than 1% of requests returning 5xx for 5 minutes."
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="{{ include "openfoundry.fullname" . }}-api-gateway"}[5m])) by (le))
+            > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High p99 latency on {{ include "openfoundry.fullname" . }}"
+            description: "p99 response time exceeds 2 seconds for 5 minutes."
+        - alert: PodRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}", pod=~"{{ include "openfoundry.fullname" . }}.*"}[1h])
+            > 3
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod restarting frequently"
+            description: "Pod {{ "{{ $labels.pod }}" }} has restarted more than 3 times in the last hour."
+        - alert: StorageUnhealthy
+          expr: |
+            openfoundry_storage_healthy == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Storage backend unhealthy"
+            description: "PostgreSQL storage health check failing for 2 minutes."
+{{- end }}

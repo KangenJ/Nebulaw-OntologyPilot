@@ -1,0 +1,40 @@
+# actions/create-order.yaml
+action: CreateOrder
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "supplier.tier != 'PROBATION'"
+    error: "Cannot place orders with suppliers on probation"
+  - expr: "params.quantity > 0"
+    error: "Order quantity must be greater than zero"
+  - expr: "actor.hasRole('procurement_manager') || actor.hasRole('supply_chain_admin')"
+    error: "Only procurement managers or supply chain admins can create orders"
+
+effects:
+  - type: createObject
+    objectType: "PurchaseOrder"
+    properties:
+      orderNumber: "params.orderNumber"
+      status: "DRAFT"
+      supplier: "supplier"
+      product: "product"
+      quantity: "params.quantity"
+      unitCost: "params.unitCost"
+      currency: "params.currency"
+      requestedDeliveryDate: "params.requestedDeliveryDate"
+      notes: "params.notes"
+
+sideEffects:
+  - name: emitOrderCreatedEvent
+    type: event
+    config:
+      type: "supply.chain.order.created"
+      data:
+        orderNumber: "params.orderNumber"
+        supplierId: "supplier.id"
+        productSku: "product.sku"
+        quantity: "params.quantity"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

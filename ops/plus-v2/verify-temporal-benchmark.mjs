@@ -1,0 +1,13 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {join,resolve} from 'node:path';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const dir=resolve(process.argv[2]),read=p=>JSON.parse(readFileSync(join(dir,p))),result=read('results.json'),data=read('data.json'),predictions=read('predictions.json');
+const sha=p=>createHash('sha256').update(readFileSync(join(dir,p))).digest('hex');
+assert.equal(sha('plan.json'),result.planHash);assert.equal(sha('data.json'),result.dataHash);assert.equal(sha('predictions.json'),result.predictionHash);
+const grouped=new Map();for(const p of predictions){const key=JSON.stringify([p.regime,p.seed,p.budget,p.model]);if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(p);}
+for(const run of result.runs){const ps=grouped.get(JSON.stringify([run.regime,run.seed,run.budget,run.model]));assert.equal(ps.length,data.plan.testCount);assert.equal(new Set(ps.map(p=>p.id)).size,ps.length);const valid=ps.filter(p=>p.p!==null);assert.equal(run.coverage,valid.length/ps.length);if(!valid.length){assert.equal(run.nll,null);continue;}const nll=valid.reduce((s,r)=>s-Math.log(r.p[r.y]),0)/valid.length,accuracy=valid.filter(r=>r.p.indexOf(Math.max(...r.p))===r.y).length/valid.length;assert.ok(Math.abs(nll-run.nll)<1e-12);assert.equal(accuracy,run.accuracy);}
+for(const set of data.datasets){const ids=[...set.old,...set.fresh,...set.test].map(r=>r.id);assert.equal(new Set(ids).size,ids.length);for(const audit of result.audits.filter(r=>r.regime===set.regime&&r.seed===set.seed)){assert.deepEqual(audit.trainingIds,set.old.concat(set.fresh.slice(0,audit.budget)).map(r=>r.id));assert.deepEqual(audit.recentIds,(audit.budget?set.fresh.slice(0,audit.budget):set.old).map(r=>r.id));}}
+const disagreements=[];for(const regime of data.plan.regimes)for(const budget of data.plan.budgets){const a=predictions.filter(r=>r.regime===regime.name&&r.budget===budget&&r.model==='plus_cumulative'),b=new Map(predictions.filter(r=>r.regime===regime.name&&r.budget===budget&&r.model==='standard_source_aware_hmm').map(r=>[r.id,r]));let both=0,different=0;for(const row of a){const other=b.get(row.id);assert.ok(other);if(!row.p||!other.p)continue;both++;different+=row.p.indexOf(Math.max(...row.p))!==other.p.indexOf(Math.max(...other.p));}disagreements.push({regime:regime.name,budget,both,different});}
+const audit={status:'PASS',hashesChecked:3,metricRowsRecomputed:result.runs.length,predictionRows:predictions.length,trainingMembershipChecked:result.audits.length,disagreements};
+writeFileSync(join(dir,'verification.json'),JSON.stringify(audit,null,2),{flag:'wx'});console.log(JSON.stringify(audit));

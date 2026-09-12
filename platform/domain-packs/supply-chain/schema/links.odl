@@ -1,0 +1,55 @@
+# Supply Chain Domain Pack — Link Types
+#
+# 7 link types connecting the supply chain object graph.
+#
+# SuppliesProduct is actively managed — created/deleted via admin actions.
+# The remaining 6 are implicit reference links: the foreign keys are stored
+# directly on the child objects, and these link type declarations enable
+# graph-based traversal when populated by the link-sync pipeline.
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+# ─── Active link (managed by actions) ───
+
+# Which products a supplier provides — with commercial terms
+type SuppliesProduct @linkType(from: "Supplier", to: "Product", cardinality: MANY_TO_MANY) {
+  id: ID! @primary
+  leadTimeDays: Int!
+  unitCost: Float!
+  minOrderQuantity: Int
+  preferredSupplier: Boolean
+}
+
+# ─── Implicit reference links (FK on child, populated by link-sync) ───
+
+# Purchase order placed with a supplier
+type OrderedFrom @linkType(from: "PurchaseOrder", to: "Supplier", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+  orderedAt: DateTime!
+}
+
+# Shipment fulfilling a purchase order
+type ShipmentForOrder @linkType(from: "Shipment", to: "PurchaseOrder", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+  createdAt: DateTime!
+}
+
+# Shipment origin facility
+type ShipsFrom @linkType(from: "Shipment", to: "Facility", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}
+
+# Shipment destination facility
+type ShipsTo @linkType(from: "Shipment", to: "Facility", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}
+
+# Inventory located at a facility
+type InventoryAt @linkType(from: "InventoryRecord", to: "Facility", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}
+
+# Inventory tracking a specific product
+type InventoryOf @linkType(from: "InventoryRecord", to: "Product", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}

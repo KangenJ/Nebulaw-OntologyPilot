@@ -1,0 +1,19 @@
+{
+  "name": "@openfoundry/domain-pack-lwm-demo",
+  "version": "0.1.0",
+  "description": "Governed Legal World Model demonstration domain pack",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@openfoundry/actions": "workspace:*",
+    "@openfoundry/odl": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.0"
+  }
+}

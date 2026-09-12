@@ -1,0 +1,20 @@
+# Source registration is not approval of a Plus rule specification.
+extend type RuleVersion {
+  importSourceSystem: String @immutable
+  importSourceRecordId: String @immutable @sensitive
+  importSourceRevision: String @immutable
+  importSourceKey: String @unique @immutable
+  importContentHash: String @immutable
+  importedAt: DateTime @immutable
+  importedBy: String @immutable
+  dataClassification: PlusClassification @immutable
+}
+
+type NativeImportTaskRule @actionType(permission:"can_import") {
+  ruleKey:String! @param title:String! @param versionTag:String! @param
+  effectiveFrom:DateTime! @param sourceCitation:String! @param
+  sourceSystem:String! @param sourceRecordId:String! @param sourceRevision:String! @param
+  workspaceKey:String! @param classification:PlusClassification! @param
+  sourceKey:String! @param contentHash:String! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}

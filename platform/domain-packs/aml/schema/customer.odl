@@ -1,0 +1,19 @@
+# AML Domain Pack — Customer ObjectType
+#
+# KYC-checked entity (individual or organization).
+# Risk level drives monitoring thresholds and alert escalation.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type Customer @objectType {
+  id: ID! @primary
+  externalId: String! @unique @indexed @immutable
+  name: String! @sensitive @searchable(weight: 2.0)
+  type: CustomerType!
+  riskLevel: RiskLevel!
+  kycStatus: KycStatus!
+  kycExpiryDate: Date
+  country: String! @indexed
+  dateOfBirth: Date @sensitive
+  taxId: String @sensitive @unique
+}

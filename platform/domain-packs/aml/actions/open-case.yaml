@@ -1,0 +1,32 @@
+# actions/open-case.yaml
+action: OpenCase
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "actor.hasRole('compliance_analyst') || actor.hasRole('compliance_officer')"
+    error: "Only compliance analysts or officers can open cases"
+
+effects:
+  - type: createObject
+    objectType: "Case"
+    properties:
+      caseNumber: "params.caseNumber"
+      status: "OPEN"
+      priority: "params.priority"
+      assignedAnalyst: "params.assignedAnalyst"
+      summary: "params.summary"
+      openDate: "now"
+
+sideEffects:
+  - name: emitCaseOpenedEvent
+    type: event
+    config:
+      type: "aml.case.opened"
+      data:
+        caseNumber: "params.caseNumber"
+        priority: "params.priority"
+        assignedAnalyst: "params.assignedAnalyst"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

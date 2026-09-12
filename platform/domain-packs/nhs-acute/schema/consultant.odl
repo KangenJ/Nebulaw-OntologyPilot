@@ -1,0 +1,13 @@
+# NHS Acute Domain Pack — Consultant ObjectType
+#
+# Per MVP Section 4.1.
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type Consultant @objectType {
+  id: ID! @primary
+  gmcNumber: String @unique @indexed
+  name: String!
+  specialty: String!
+  patients: [Patient!]! @link(type: "UnderCareOf", direction: INBOUND)
+}

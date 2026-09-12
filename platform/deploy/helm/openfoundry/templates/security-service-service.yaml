@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-security-service
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: security-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.securityService.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "openfoundry.selectorLabels" (dict "name" "security-service" "release" .Release.Name) | nindent 4 }}

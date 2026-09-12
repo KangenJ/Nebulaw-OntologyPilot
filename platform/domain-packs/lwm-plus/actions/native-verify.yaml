@@ -1,0 +1,29 @@
+action: NativeVerifyObservation
+version: 1
+reversible: false
+preconditions:
+  - expr: "actor.hasRole('data_reviewer')"
+    error: "Evidence verification requires data reviewer"
+  - expr: "observation != null && observation._version == params.expectedVersion"
+    error: "Observation missing or stale"
+  - expr: "observation.recordedBy != actor.id && !observation.verified"
+    error: "Independent verifier required; evidence already verified"
+effects:
+  - type: updateObject
+    target: observation
+    set:
+      verified: "true"
+      verifiedBy: actor.id
+  - type: createObject
+    objectType: NativeCommandReceipt
+    properties:
+      commandKey: params.commandKey
+      commandHash: params.commandHash
+      actorId: actor.id
+      actionName: NativeVerifyObservation
+      resultType: Observation
+      resultId: observation._id
+      traceId: params.traceId
+      createdAt: now
+
+sideEffects: []

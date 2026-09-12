@@ -1,0 +1,26 @@
+# NHS Acute Domain Pack — Patient ObjectType
+#
+# Per MVP Section 4.1.
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type Patient @objectType {
+  id: ID! @primary
+  nhsNumber: String @unique @indexed
+  name: String! @sensitive @searchable(weight: 2.0)
+  # Structured-name decomposition (v0.2.0 B2). `name` stays the full display
+  # name (searchable/back-compat); `family` (surname) and `given` (one or more
+  # forenames, space-separated) are the structured components projected to FHIR
+  # HumanName.family/given[] and the CDM Patient.family/given. Optional so
+  # registrations that only supply a display name keep working.
+  family: String @sensitive
+  given: String @sensitive
+  dateOfBirth: Date! @sensitive
+  status: PatientStatus!
+  triageCategory: TriageCategory
+  presentingComplaint: String
+  currentWard: Ward @link(type: "AdmittedTo", direction: OUTBOUND)
+  currentBed: Bed @link(type: "OccupiesBed", direction: OUTBOUND)
+  admissions: [AdmittedTo!]! @link(type: "AdmittedTo", direction: OUTBOUND, history: true)
+  consultant: Consultant @link(type: "UnderCareOf", direction: OUTBOUND)
+}

@@ -1,0 +1,15 @@
+{
+  "name": "nebulaw-ontology-pilot",
+  "version": "0.2.0",
+  "private": false,
+  "description": "Independent Open Foundry engineering demo with non-Transformer dynamics service; not production certified",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "test:smoke": "node --test platform/apps/lwm-demo/tests/native-journey-mock.test.mjs platform/apps/lwm-demo/tests/native-journey-ui.test.mjs platform/apps/lwm-demo/tests/native-journey-flow.test.mjs platform/apps/lwm-demo/tests/native-workbench.test.mjs ops/plus-v2/source-aware-candidate.test.mjs",
+    "audit:release": "node ops/release-audit.mjs",
+    "snapshot:public": "node ops/create-public-snapshot.mjs",
+    "verify:model-package": "node ops/verify-model-package.mjs"
+  }
+}

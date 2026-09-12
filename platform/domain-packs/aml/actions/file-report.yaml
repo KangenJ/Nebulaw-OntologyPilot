@@ -1,0 +1,34 @@
+# actions/file-report.yaml
+action: FileReport
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "investigationCase.status == 'UNDER_REVIEW' || investigationCase.status == 'ESCALATED'"
+    error: "Case must be under review or escalated to file a report"
+  - expr: "actor.hasRole('compliance_officer') || actor.hasRole('bsa_officer')"
+    error: "Only compliance officers or BSA officers can draft SARs"
+
+effects:
+  - type: createObject
+    objectType: "SuspiciousActivityReport"
+    properties:
+      sarNumber: "params.sarNumber"
+      status: "DRAFT"
+      filingDate: "now"
+      narrative: "params.narrative"
+      amount: "params.amount"
+      reportingEntity: "params.reportingEntity"
+      caseRef: "investigationCase"
+
+sideEffects:
+  - name: emitSarDraftedEvent
+    type: event
+    config:
+      type: "aml.sar.drafted"
+      data:
+        sarNumber: "params.sarNumber"
+        caseNumber: "investigationCase.caseNumber"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

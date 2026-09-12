@@ -1,0 +1,124 @@
+extend schema @namespace(name: "lwm.plus", version: "0.1.0")
+
+type WorkspaceControl @objectType {
+  id: ID! @primary
+  key: String! @unique
+  updatedAt: DateTime!
+}
+
+type ImportBatch @objectType {
+  id: ID! @primary
+  key: String! @unique
+  source: String!
+  mappingJson: String!
+  reportJson: String!
+  createdBy: String!
+  createdAt: DateTime!
+}
+
+type OntologyDraft @objectType {
+  id: ID! @primary
+  key: String! @unique
+  definitionJson: String!
+  status: String!
+  createdBy: String!
+  approvedBy: String
+  createdAt: DateTime!
+}
+
+type SimulationRun @objectType {
+  id: ID! @primary
+  key: String! @unique
+  matterId: String!
+  matterVersion: Int!
+  inputJson: String!
+  outputJson: String!
+  modelHash: String!
+  policyId: String!
+  createdBy: String!
+  createdAt: DateTime!
+}
+
+type OutcomeRecord @objectType {
+  id: ID! @primary
+  key: String! @unique
+  simulationId: String!
+  matterId: String!
+  optionIndex: Int!
+  actual: Int!
+  evidence: String!
+  recordedBy: String!
+  verifiedBy: String
+  status: String!
+  privacyConfirmed: Boolean!
+  createdAt: DateTime!
+}
+
+type DecisionPolicy @objectType {
+  id: ID! @primary
+  key: String! @unique
+  artifactJson: String!
+  datasetJson: String!
+  evaluationJson: String!
+  trainedBy: String!
+  approvedBy: String
+  stage: String!
+  parentId: String!
+  createdAt: DateTime!
+  artifactHash: String
+  evaluationHash: String
+}
+
+type TrajectoryFeedback @objectType {
+  id: ID! @primary
+  key: String! @unique
+  outcomeId: String! @unique
+  mechanismKey: String!
+  split: String!
+  actionsJson: String!
+  source: String!
+  protocol: String!
+  status: String!
+  recordedBy: String!
+  verifiedBy: String
+  verificationNote: String
+  privacyConfirmed: Boolean!
+  createdAt: DateTime!
+}
+
+type LearningDataset @objectType {
+  id: ID! @primary
+  key: String! @unique
+  rowsJson: String!
+  contentHash: String!
+  status: String!
+  createdBy: String!
+  createdAt: DateTime!
+}
+
+type MigrationRecord @objectType {
+  id: ID! @primary
+  key: String! @unique
+  sourceHash: String!
+  reportJson: String!
+  createdBy: String!
+  createdAt: DateTime!
+}
+
+type NativePlusCommand @actionType(permission: "can_plus") {
+  operation: String! @param
+  workspace: WorkspaceControl! @param
+  expectedWorkspaceVersion: Int! @param
+  matter: Matter @param
+  expectedMatterVersion: Int @param
+  observation: Observation @param
+  expectedObservationVersion: Int @param
+  draft: OntologyDraft @param
+  policy: DecisionPolicy @param
+  activePolicy: DecisionPolicy @param
+  outcome: OutcomeRecord @param
+  simulation: SimulationRun @param
+  feedback: FeedbackEvent @param
+  trajectory: TrajectoryFeedback @param
+  dataset: LearningDataset @param
+}

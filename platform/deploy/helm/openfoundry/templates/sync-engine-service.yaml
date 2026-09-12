@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-sync-engine
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sync-engine
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.syncEngine.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "openfoundry.selectorLabels" (dict "name" "sync-engine" "release" .Release.Name) | nindent 4 }}

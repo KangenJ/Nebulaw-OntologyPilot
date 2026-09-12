@@ -1,0 +1,45 @@
+action: PromoteModel
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "candidate.workspaceKey == activeModel.workspaceKey"
+    error: "Candidate and active model must belong to the same workspace"
+  - expr: "candidate.stage == 'CANDIDATE'"
+    error: "Only candidate models can be promoted"
+  - expr: "activeModel.stage == 'ACTIVE'"
+    error: "A valid active rollback target is required"
+  - expr: "candidate.validationScore >= 0.85"
+    error: "Candidate validation score is below the promotion threshold"
+  - expr: "candidate.calibrationError <= 0.12"
+    error: "Candidate calibration error exceeds the promotion threshold"
+  - expr: "actor.hasRole('model_owner') || actor.hasRole('admin')"
+    error: "Only model owners or admins can promote models"
+
+effects:
+  - type: updateObject
+    target: "activeModel"
+    set:
+      stage: "STANDBY"
+
+  - type: updateObject
+    target: "candidate"
+    set:
+      stage: "ACTIVE"
+      approvedBy: "params.approver"
+      approvedAt: "now"
+      rollbackTarget: "activeModel.versionLabel"
+
+sideEffects:
+  - name: emitModelPromoted
+    type: event
+    config:
+      type: "lwm.demo.model.promoted"
+      data:
+        modelVersion: "candidate.versionLabel"
+        rollbackTarget: "activeModel.versionLabel"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

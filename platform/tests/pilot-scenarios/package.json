@@ -1,0 +1,27 @@
+{
+  "name": "@openfoundry/pilot-scenarios",
+  "version": "0.0.1",
+  "description": "End-to-end pilot scenario tests (MVP Section 7)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:verbose": "vitest run --reporter=verbose",
+    "clean": "rm -rf dist coverage"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@openfoundry/actions": "workspace:*",
+    "@openfoundry/api": "workspace:*",
+    "@openfoundry/odl": "workspace:*",
+    "@openfoundry/security": "workspace:*",
+    "@openfoundry/spi": "workspace:*",
+    "@openfoundry/storage-memory": "workspace:*",
+    "@openfoundry/sync": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}

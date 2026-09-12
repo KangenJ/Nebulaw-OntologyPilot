@@ -1,0 +1,50 @@
+# pack.yaml
+name: nhs-acute
+version: 0.2.0
+description: "NHS acute healthcare domain pack — pilot slice"
+namespace: nhs.acute
+
+dependencies:
+  openfoundry.core: ">=1.0.0"
+
+# Platform capabilities this pack opts into. The FHIR facade (/fhir/*) and the
+# FDP/CDM projection (/api/v1/cdm/*) are NHS-shaped and only mounted when a
+# loaded pack declares them — so AML/supply-chain-only deployments don't expose
+# NHS endpoints.
+capabilities:
+  - fhir
+  - cdm
+
+provides:
+  objectTypes: 7
+  linkTypes: 6
+  actionTypes: 5
+  functions: 0
+  connectors: 1
+  widgets: 0
+  qualityRules: 0
+
+schema:
+  - schema/enums.odl
+  - schema/patient.odl
+  - schema/ward.odl
+  - schema/bed.odl
+  - schema/consultant.odl
+  - schema/staff.odl
+  - schema/discharge-record.odl
+  - schema/transfer.odl
+  - schema/links.odl
+  - schema/actions.odl
+
+actions:
+  - actions/admit-patient.yaml
+  - actions/discharge-patient.yaml
+  - actions/transfer-ward.yaml
+  - actions/clean-bed.yaml
+  - actions/register-patient.yaml
+
+connectors:
+  - connectors/pas-jdbc.yaml
+
+permissions:
+  - permissions/nhs-roles.fga

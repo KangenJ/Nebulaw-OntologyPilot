@@ -1,0 +1,41 @@
+action: RollbackModel
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "activeModel.workspaceKey == rollbackModel.workspaceKey"
+    error: "Models must belong to the same workspace"
+  - expr: "activeModel.stage == 'ACTIVE'"
+    error: "The current model is not active"
+  - expr: "rollbackModel.stage == 'STANDBY'"
+    error: "Rollback target must be a tested standby model"
+  - expr: "actor.hasRole('model_owner') || actor.hasRole('admin')"
+    error: "Only model owners or admins can roll back models"
+
+effects:
+  - type: updateObject
+    target: "activeModel"
+    set:
+      stage: "HELD"
+
+  - type: updateObject
+    target: "rollbackModel"
+    set:
+      stage: "ACTIVE"
+      approvedBy: "params.approver"
+      approvedAt: "now"
+
+sideEffects:
+  - name: emitModelRolledBack
+    type: event
+    config:
+      type: "lwm.demo.model.rolled_back"
+      data:
+        previousVersion: "activeModel.versionLabel"
+        restoredVersion: "rollbackModel.versionLabel"
+        reason: "params.reason"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

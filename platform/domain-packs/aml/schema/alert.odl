@@ -1,0 +1,21 @@
+# AML Domain Pack — Alert ObjectType
+#
+# System-generated or manual alert for suspicious activity.
+# transaction and customer are FK references set at creation.
+# Alerts are assigned to Cases via the AlertCase link type.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type Alert @objectType {
+  id: ID! @primary
+  alertNumber: String! @unique @indexed @immutable
+  severity: AlertSeverity!
+  status: AlertStatus!
+  ruleName: String! @indexed
+  score: Float @constraint(expr: "value >= 0")
+  narrative: String
+  transaction: String @indexed
+  customer: String! @indexed
+  assignedTo: String
+  createdDate: DateTime!
+}

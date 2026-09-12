@@ -1,0 +1,21 @@
+# Integration-test fixtures pack.
+#
+# Seed-only pack (declares NO new ODL types) that bootstraps the reference data
+# the legacy integration suites expect — wards, beds, consultants and a few
+# discharged patients of the nhs-acute types. It is loaded ONLY during
+# integration tests via DOMAIN_PACKS_EXTRA_DIRS (wired in deploy/
+# docker-compose.test.yaml), so it never ships in the production image and never
+# pollutes a normal `docker compose up`.
+#
+# The platform is action-oriented (no generic object-CRUD create path), so
+# reference data like wards/beds — which have no creating action — must come
+# from a boot seed. Patients could be created via the RegisterPatient action,
+# but are seeded here too so the legacy SeededData contract is satisfied by a
+# single mechanism.
+name: integration-fixtures
+version: 0.0.1
+namespace: test.fixtures
+description: "Reference data for Open Foundry integration tests (test-only)"
+
+seed:
+  - seeds/reference-data.yaml

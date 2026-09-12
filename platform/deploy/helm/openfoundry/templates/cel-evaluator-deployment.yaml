@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-cel-evaluator
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cel-evaluator
+spec:
+  replicas: {{ .Values.celEvaluatorService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openfoundry.selectorLabels" (dict "name" "cel-evaluator" "release" .Release.Name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openfoundry.selectorLabels" (dict "name" "cel-evaluator" "release" .Release.Name) | nindent 8 }}
+        app.kubernetes.io/component: cel-evaluator
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "openfoundry.serviceAccountName" . }}
+      {{/* HELM-07: Security context for all pods */}}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: cel-evaluator
+          image: {{ include "openfoundry.image" (dict "global" .Values.image "svc" .Values.celEvaluatorService.image "name" "cel") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{/* HELM-07: Container security context */}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.celEvaluatorService.port }}
+              protocol: TCP
+          env:
+            - name: CEL_PORT
+              value: {{ .Values.celEvaluatorService.port | quote }}
+          {{/* HELM-11: Use gRPC probes instead of TCP socket */}}
+          livenessProbe:
+            grpc:
+              port: {{ .Values.celEvaluatorService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            grpc:
+              port: {{ .Values.celEvaluatorService.port }}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.celEvaluatorService.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

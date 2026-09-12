@@ -1,0 +1,21 @@
+# Bootstrap seed data for the test-external pack.
+# Creates two Widget objects and a BelongsTo link between them.
+objects:
+  - type: Widget
+    ref: parent-widget
+    fields:
+      name: "Root Widget"
+      serialNumber: "SEED-001"
+      status: ACTIVE
+
+  - type: Widget
+    ref: child-widget
+    fields:
+      name: "Child Widget"
+      serialNumber: "SEED-002"
+      status: ACTIVE
+
+links:
+  - type: BelongsTo
+    from: child-widget
+    to: parent-widget

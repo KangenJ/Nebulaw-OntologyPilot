@@ -1,0 +1,325 @@
+# Open Foundry Helm Chart — values.yaml
+# Matches MVP Section 5.3 helm install parameters.
+
+# -- Global image settings
+image:
+  # Images are published to GHCR by the release workflow.
+  registry: ghcr.io/syzygyhack/open-foundry
+  pullPolicy: IfNotPresent
+  # Pinned to an exact release, never a floating minor. For immutable
+  # deployments override with a digest, e.g.
+  #   --set apiGateway.image.repository=ghcr.io/.../api-gateway@sha256:<digest>
+  tag: "0.2.3"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Storage provider configuration
+# MVP supports postgres only.
+storage:
+  provider: postgres
+  postgres:
+    host: postgresql
+    port: 5432
+    database: openfoundry
+    existingSecret: openfoundry-postgres
+    secretKeys:
+      username: username
+      password: password
+
+# -- Event bus (Kafka-compatible)
+# Set bootstrapServers to enable persistent event streaming (e.g. "redpanda:9092").
+# Leave empty for in-memory events (single-pod only).
+eventBus:
+  redpanda:
+    bootstrapServers: ""
+
+# -- Redis (distributed rate limiting)
+redis:
+  url: ""
+
+# -- Authentication / OIDC
+auth:
+  oidc:
+    issuer: https://am.nhsidentity.spineservices.nhs.uk
+    clientId: ""
+    # Override for non-Keycloak issuers (e.g. NHS CIS2). If empty, uses ${issuer}/protocol/openid-connect/certs
+    jwksUri: ""
+    # Opt-in fallback tenant for tokens without a `tenant_id` claim. Empty →
+    # fail-closed (claimless tokens rejected); a real tenant_id claim always wins.
+    # Single-tenant deployments set this (e.g. "default"); multi-tenant leave empty.
+    defaultTenant: ""
+    existingSecret: openfoundry-oidc
+    secretKeys:
+      clientSecret: clientSecret
+
+# -- Authorization (OpenFGA)
+authz:
+  openfga:
+    url: http://openfga:8080
+    storeId: ""
+
+# -- Domain packs to load at startup
+domainPacks:
+  - name: nhs-acute
+    version: "0.2.0"
+
+# -- External domain packs (loaded from volumes mounted into the api-gateway pod)
+# Each source defines a volume + mount that makes a pack directory available.
+# The schema loader scans each mountPath for pack.yaml files.
+#
+# Supported volume types: configMap, persistentVolumeClaim, emptyDir
+# emptyDir requires a git-sync init container to populate it — see docs/external-domain-packs.md.
+# Each source MUST specify exactly one of: configMap, persistentVolumeClaim, or emptyDir.
+#
+# Example:
+#   domainPacksExtra:
+#     sources:
+#       - name: rce
+#         mountPath: /external-packs/rce
+#         persistentVolumeClaim:
+#           claimName: rce-pack-pvc
+domainPacksExtra:
+  sources: []
+
+# -- Observability (OpenTelemetry)
+observability:
+  otlp:
+    endpoint: otel-collector:4317
+
+# -- Sync engine / CDC
+sync:
+  pas:
+    dbUrl: ""
+    existingSecret: openfoundry-pas
+    secretKeys:
+      dbUrl: dbUrl
+  debezium:
+    url: http://debezium:8083
+
+# -- CEL evaluator (Go sidecar)
+# HELM-20: Include grpc:// protocol prefix
+celEvaluator:
+  url: grpc://cel-evaluator:50051
+
+# -- CORS (comma-separated origins for production; empty = deny all cross-origin)
+cors:
+  allowedOrigins: []
+
+# -- FHIR base URL (used in Bundle fullUrl links; must be externally routable)
+fhirBaseUrl: ""
+
+# Governance policy: platform roles allowed to grant relationships / record
+# consent, and the default consent purpose for access checks. Defaults are
+# generic (`admin` only) — no domain-specific roles are forced. NHS deployments
+# override, e.g.:
+#   governance:
+#     relationshipGranterRoles: [admin, nurse_in_charge]
+#     consentRecorderRoles: [admin, nurse_in_charge, clinician]
+#     defaultConsentPurpose: DIRECT_CARE
+governance:
+  relationshipGranterRoles:
+    - admin
+  consentRecorderRoles:
+    - admin
+  # Consent-purpose vocabulary (DataPurpose is an open string type). Empty → the
+  # standard NHS/UK-IG preset. A non-NHS deployment lists its own purposes, e.g.
+  # [KYC, AML_MONITORING].
+  consentPurposes: []
+  # Default purpose for access checks; must be within consentPurposes when that
+  # is set. Empty → platform default (DIRECT_CARE).
+  defaultConsentPurpose: ""
+  # Object types whose @param marks an action's consent subject. Empty → Patient
+  # (NHS). A non-NHS deployment sets its own, e.g. [Customer].
+  consentSubjectTypes: []
+  # Legitimate-relationship consent exemption (NHS s251 reference case).
+  # Generic default OFF — enable + set purpose for an NHS deployment:
+  #   directCareExemption: true
+  #   exemptionPurpose: DIRECT_CARE
+  directCareExemption: false
+  exemptionPurpose: ""
+
+# HELM-25: Configurable runtime environment
+nodeEnv: production
+
+# HELM-14: Service account name for all deployments
+serviceAccount:
+  name: ""
+
+# -- Per-service configuration
+
+# HELM-12: Per-service resource profiles (differentiated by workload type).
+# HELM-13: Ephemeral storage limits included to prevent disk exhaustion.
+
+apiGateway:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/syzygyhack/open-foundry/api-gateway
+  port: 4000
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+  pdb:
+    minAvailable: 1
+  antiAffinity: soft
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+      ephemeral-storage: 100Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+      ephemeral-storage: 500Mi
+
+ontologyEngine:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/syzygyhack/open-foundry/ontology-engine
+  port: 4001
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+  pdb:
+    minAvailable: 1
+  antiAffinity: soft
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+      ephemeral-storage: 100Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 500Mi
+
+actionExecutor:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/syzygyhack/open-foundry/action-executor
+  port: 4002
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+  pdb:
+    minAvailable: 1
+  antiAffinity: soft
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeral-storage: 100Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 500Mi
+
+syncEngine:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/syzygyhack/open-foundry/sync-engine
+  port: 4003
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 75
+  pdb:
+    minAvailable: 1
+  antiAffinity: soft
+  resources:
+    requests:
+      cpu: 150m
+      memory: 384Mi
+      ephemeral-storage: 100Mi
+    limits:
+      cpu: 750m
+      memory: 768Mi
+      ephemeral-storage: 500Mi
+
+securityService:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/syzygyhack/open-foundry/security-service
+  port: 4004
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+  pdb:
+    minAvailable: 1
+  antiAffinity: soft
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeral-storage: 100Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 500Mi
+
+celEvaluatorService:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/syzygyhack/open-foundry/cel-evaluator
+  port: 50051
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+      ephemeral-storage: 50Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+      ephemeral-storage: 200Mi
+
+# -- Ingress for api-gateway
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: openfoundry.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# -- Monitoring (Prometheus Operator CRDs)
+monitoring:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    namespace: ""
+  prometheusRules:
+    enabled: false
+
+# -- Database initialization Job (runs as Helm post-install/post-upgrade hook)
+initJob:
+  enabled: true
+  image: postgres:17
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# -- PostgreSQL PVC (for bundled PostgreSQL; disable if using external)
+postgresql:
+  enabled: false
+  persistence:
+    size: 10Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce

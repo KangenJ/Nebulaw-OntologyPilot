@@ -1,0 +1,19 @@
+# Explicit additive domain publication. Retired NativeImportMatter remains disabled.
+extend type Matter {
+  importSourceSystem: String @immutable
+  importSourceRecordId: String @immutable @sensitive
+  importSourceRevision: String @immutable
+  importSourceKey: String @unique @immutable
+  importContentHash: String @immutable
+  importedAt: DateTime @immutable
+  dataClassification: PlusClassification @immutable
+}
+
+type NativeImportTaskMatter @actionType(permission:"can_import") {
+  matterNumber:String! @param title:String! @param jurisdiction:String! @param
+  currentState:String! @param riskBand:RiskBand! @param openedAt:DateTime! @param
+  sourceSystem:String! @param sourceRecordId:String! @param sourceRevision:String! @param
+  workspaceKey:String! @param classification:PlusClassification! @param
+  sourceKey:String! @param contentHash:String! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}

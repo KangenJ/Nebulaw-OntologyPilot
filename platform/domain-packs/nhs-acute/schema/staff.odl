@@ -1,0 +1,16 @@
+# NHS Acute Domain Pack — Staff ObjectType (v0.2.0 B4).
+#
+# Broadens clinical-staff coverage beyond Consultant. Nurses, allied health
+# professionals (AHPs), healthcare assistants, administrative staff, and porters
+# previously had no ODL type, so CDM Practitioner coverage was consultant-only.
+# Staff is operational reference data (seed-provisioned, like Consultant) and
+# projects to the CDM Practitioner resource alongside Consultant.
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type Staff @objectType {
+  id: ID! @primary
+  staffId: String @unique @indexed
+  name: String!
+  role: StaffRole!
+  specialty: String
+}

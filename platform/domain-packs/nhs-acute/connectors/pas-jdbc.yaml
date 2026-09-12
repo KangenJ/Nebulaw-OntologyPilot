@@ -1,0 +1,31 @@
+# connectors/pas-jdbc.yaml
+datasource: PAS_Patients
+connector: jdbc
+connection:
+  url: "${PAS_DB_URL}"
+  table: "patients"
+
+mapping:
+  objectType: Patient
+  primaryKey:
+    source: "patient_id"
+    target: "id"
+    transform: "prefix('patient-')"
+  properties:
+    nhsNumber: { source: "nhs_no" }
+    name: { source: "surname", transform: "concat(title, ' ', forename, ' ', surname)" }
+    dateOfBirth: { source: "dob", transform: "parseDate('dd/MM/yyyy')" }
+    status: { source: "discharge_date", transform: "ifPresent('DISCHARGED', 'ACTIVE')" }
+
+sync:
+  mode: OVERLAY
+  cacheStrategy: TTL
+  cacheTTL: "PT5M"
+  writeback: false
+
+# After pilot validation, switch to CDC:
+# sync:
+#   mode: CDC
+#   conflictResolution: SOURCE_PRIORITY
+#   rateLimit:
+#     maxRecordsPerSecond: 500

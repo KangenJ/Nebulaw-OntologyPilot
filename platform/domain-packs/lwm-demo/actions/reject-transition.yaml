@@ -1,0 +1,77 @@
+action: RejectTransition
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "proposal.workspaceKey == model.workspaceKey"
+    error: "Proposal and model must belong to the same workspace"
+  - expr: "proposal.status == 'PENDING' || proposal.status == 'NEEDS_EVIDENCE'"
+    error: "Only open proposals can be rejected"
+  - expr: "actor.hasRole('case_reviewer') || actor.hasRole('admin')"
+    error: "Only case reviewers or admins can reject proposals"
+
+effects:
+  - type: updateObject
+    target: "proposal"
+    set:
+      status: "REJECTED"
+
+  - type: createObject
+    objectType: "HumanReview"
+    properties:
+      workspaceKey: "proposal.workspaceKey"
+      reviewNumber: "params.reviewNumber"
+      title: "params.reviewNumber"
+      reviewer: "params.reviewer"
+      decision: "REJECT"
+      previousState: "proposal.fromState"
+      note: "params.note"
+      reviewedAt: "now"
+
+  - type: createLink
+    linkType: "ProposalReview"
+    from: "proposal"
+    to: "humanReview"
+    properties:
+      linkedAt: "now"
+
+  - type: createObject
+    objectType: "FeedbackEvent"
+    properties:
+      workspaceKey: "proposal.workspaceKey"
+      eventNumber: "params.feedbackNumber"
+      title: "params.feedbackNumber"
+      outcome: "REJECTED"
+      label: "proposal.fromState"
+      reason: "params.note"
+      eligibility: "ELIGIBLE"
+      modelVersion: "model.versionLabel"
+      createdAt: "now"
+
+  - type: createLink
+    linkType: "ReviewFeedback"
+    from: "humanReview"
+    to: "feedbackEvent"
+    properties:
+      linkedAt: "now"
+
+  - type: createLink
+    linkType: "ModelFeedback"
+    from: "model"
+    to: "feedbackEvent"
+    properties:
+      linkedAt: "now"
+
+sideEffects:
+  - name: emitTransitionRejected
+    type: event
+    config:
+      type: "lwm.demo.transition.rejected"
+      data:
+        proposalNumber: "proposal.proposalNumber"
+        modelVersion: "model.versionLabel"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

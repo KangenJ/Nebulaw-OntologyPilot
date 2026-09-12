@@ -1,0 +1,9 @@
+name: plus-core
+version: 0.1.0
+description: "Ontology-native Plus v2 metadata; no domain business facts or direct execution endpoints"
+namespace: plus.core
+dependencies:
+  openfoundry.core: ">=1.0.0"
+schema:
+  - schema/metadata.odl
+actions: []

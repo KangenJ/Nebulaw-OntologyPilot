@@ -1,0 +1,135 @@
+extend schema @namespace(name: "lwm.demo", version: "0.1.0")
+
+type Matter @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  matterNumber: String! @unique @indexed @immutable
+  title: String! @indexed @searchable(weight: 2.0)
+  jurisdiction: String! @indexed
+  status: MatterStatus!
+  currentState: String! @indexed
+  riskBand: RiskBand!
+  owner: String! @indexed
+  summary: String @sensitive
+  openedAt: DateTime!
+  dueAt: DateTime
+  observations: [Observation!]! @link(type: "MatterObservation", direction: OUTBOUND)
+  proposals: [TransitionProposal!]! @link(type: "MatterProposal", direction: OUTBOUND)
+  tasks: [InvestigationTask!]! @link(type: "MatterTask", direction: OUTBOUND)
+}
+
+type RuleVersion @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  ruleKey: String! @unique @indexed @immutable
+  title: String! @indexed
+  versionTag: String! @indexed
+  lifecycle: RuleLifecycle!
+  effectiveFrom: DateTime!
+  sourceCitation: String!
+  deterministic: Boolean!
+}
+
+type Observation @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  observationNumber: String! @unique @indexed @immutable
+  title: String! @indexed
+  kind: ObservationKind!
+  source: String! @indexed
+  summary: String! @sensitive
+  confidence: Float! @constraint(expr: "value >= 0 && value <= 1")
+  verified: Boolean!
+  recordedBy: String
+  verifiedBy: String
+  observedAt: DateTime!
+  matter: Matter @link(type: "MatterObservation", direction: INBOUND)
+}
+
+type TransitionProposal @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  proposalNumber: String! @unique @indexed @immutable
+  title: String! @indexed
+  fromState: String! @indexed
+  toState: String! @indexed
+  status: ProposalStatus!
+  riskBand: RiskBand!
+  confidence: Float! @constraint(expr: "value >= 0 && value <= 1")
+  rationale: String! @sensitive
+  evidenceSummary: String! @sensitive
+  gateStatus: GateStatus!
+  gateReason: String
+  createdAt: DateTime!
+  matter: Matter @link(type: "MatterProposal", direction: INBOUND)
+  proposedBy: String
+  simulationId: String
+  plannedOptionIndex: Int
+  basisObservationId: String
+  basisObservationVersion: Int
+  model: ModelVersion @link(type: "ModelProposal", direction: INBOUND)
+  reviews: [HumanReview!]! @link(type: "ProposalReview", direction: OUTBOUND)
+}
+
+type HumanReview @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  reviewNumber: String! @unique @indexed @immutable
+  title: String! @indexed
+  reviewer: String! @indexed
+  decision: ReviewDecision!
+  previousState: String!
+  appliedState: String
+  note: String @sensitive
+  reviewedAt: DateTime!
+  proposal: TransitionProposal @link(type: "ProposalReview", direction: INBOUND)
+  feedback: FeedbackEvent @link(type: "ReviewFeedback", direction: OUTBOUND)
+}
+
+type InvestigationTask @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  taskNumber: String! @unique @indexed @immutable
+  title: String! @indexed @searchable(weight: 2.0)
+  status: TaskStatus!
+  priority: RiskBand!
+  assignee: String! @indexed
+  instructions: String! @sensitive
+  dueAt: DateTime!
+  createdAt: DateTime!
+  completedAt: DateTime
+  matter: Matter @link(type: "MatterTask", direction: INBOUND)
+}
+
+type FeedbackEvent @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  eventNumber: String! @unique @indexed @immutable
+  title: String! @indexed
+  outcome: FeedbackOutcome!
+  label: String!
+  reason: String @sensitive
+  eligibility: EligibilityStatus!
+  modelVersion: String! @indexed
+  createdAt: DateTime!
+  review: HumanReview @link(type: "ReviewFeedback", direction: INBOUND)
+  model: ModelVersion @link(type: "ModelFeedback", direction: INBOUND)
+}
+
+type ModelVersion @objectType {
+  id: ID! @primary
+  workspaceKey: String! @indexed @immutable
+  modelKey: String! @unique @indexed @immutable
+  title: String! @indexed
+  versionLabel: String! @indexed
+  stage: ModelStage!
+  trainingWindow: String!
+  validationScore: Float! @constraint(expr: "value >= 0 && value <= 1")
+  calibrationError: Float! @constraint(expr: "value >= 0 && value <= 1")
+  approvedBy: String
+  approvedAt: DateTime
+  rollbackTarget: String
+  createdAt: DateTime!
+  proposals: [TransitionProposal!]! @link(type: "ModelProposal", direction: OUTBOUND)
+  feedbackEvents: [FeedbackEvent!]! @link(type: "ModelFeedback", direction: OUTBOUND)
+}

@@ -1,0 +1,14 @@
+{{- if gt (int .Values.ontologyEngine.replicaCount) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-ontology-engine
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ontology-engine
+spec:
+  minAvailable: {{ .Values.ontologyEngine.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "openfoundry.selectorLabels" (dict "name" "ontology-engine" "release" .Release.Name) | nindent 6 }}
+{{- end }}

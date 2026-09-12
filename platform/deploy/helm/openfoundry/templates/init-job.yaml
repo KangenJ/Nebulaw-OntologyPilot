@@ -1,0 +1,76 @@
+{{- if .Values.initJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-init
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: init-job
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: init
+          image: {{ .Values.initJob.image }}
+          resources:
+            {{- toYaml .Values.initJob.resources | nindent 12 }}
+          env:
+            - name: PGHOST
+              value: {{ .Values.storage.postgres.host | quote }}
+            - name: PGPORT
+              value: {{ .Values.storage.postgres.port | quote }}
+            - name: PGDATABASE
+              value: {{ .Values.storage.postgres.database | quote }}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.postgres.existingSecret }}
+                  key: {{ .Values.storage.postgres.secretKeys.username }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.postgres.existingSecret }}
+                  key: {{ .Values.storage.postgres.secretKeys.password }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "[init] Waiting for PostgreSQL..."
+              until pg_isready -q; do sleep 2; done
+              echo "[init] PostgreSQL ready. Initializing AGE extension..."
+              psql -q <<'SQL'
+              CREATE EXTENSION IF NOT EXISTS age;
+              LOAD 'age';
+              SET search_path = ag_catalog, "$user", public;
+              SELECT create_graph('openfoundry') WHERE NOT EXISTS (
+                SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'openfoundry'
+              );
+              CREATE TABLE IF NOT EXISTS _domain_packs (
+                name TEXT PRIMARY KEY, version TEXT NOT NULL,
+                namespace TEXT NOT NULL, loaded_at TIMESTAMPTZ DEFAULT NOW()
+              );
+              CREATE TABLE IF NOT EXISTS _object_types (
+                pack_name TEXT REFERENCES _domain_packs(name),
+                type_name TEXT NOT NULL, namespace TEXT NOT NULL,
+                definition JSONB NOT NULL, PRIMARY KEY (pack_name, type_name)
+              );
+              CREATE TABLE IF NOT EXISTS _link_types (
+                pack_name TEXT REFERENCES _domain_packs(name),
+                type_name TEXT NOT NULL, namespace TEXT NOT NULL,
+                definition JSONB NOT NULL, PRIMARY KEY (pack_name, type_name)
+              );
+              SQL
+              echo "[init] Database initialization complete."
+{{- end }}

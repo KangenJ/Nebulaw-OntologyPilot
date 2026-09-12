@@ -1,0 +1,40 @@
+# pack.yaml
+name: supply-chain
+version: 0.1.0
+description: "Supply chain control tower domain pack — visibility, disruption management, and inventory optimization"
+namespace: supply.chain
+
+dependencies:
+  openfoundry.core: ">=1.0.0"
+
+provides:
+  objectTypes: 6
+  linkTypes: 7
+  actionTypes: 4
+  functions: 0
+  connectors: 1
+  widgets: 0
+  qualityRules: 0
+
+schema:
+  - schema/enums.odl
+  - schema/supplier.odl
+  - schema/facility.odl
+  - schema/product.odl
+  - schema/purchase-order.odl
+  - schema/shipment.odl
+  - schema/inventory-record.odl
+  - schema/links.odl
+  - schema/actions.odl
+
+actions:
+  - actions/create-order.yaml
+  - actions/ship-order.yaml
+  - actions/receive-shipment.yaml
+  - actions/cancel-order.yaml
+
+connectors:
+  - connectors/erp-jdbc.yaml
+
+permissions:
+  - permissions/supply-chain-roles.fga

@@ -1,0 +1,42 @@
+# pack.yaml
+name: aml
+version: 0.1.0
+description: "Anti-money laundering and financial compliance domain pack — transaction monitoring, alert triage, and SAR filing"
+namespace: aml
+
+dependencies:
+  openfoundry.core: ">=1.0.0"
+
+provides:
+  objectTypes: 6
+  linkTypes: 7
+  actionTypes: 6
+  functions: 0
+  connectors: 1
+  widgets: 0
+  qualityRules: 0
+
+schema:
+  - schema/enums.odl
+  - schema/customer.odl
+  - schema/account.odl
+  - schema/transaction.odl
+  - schema/alert.odl
+  - schema/case.odl
+  - schema/suspicious-activity-report.odl
+  - schema/links.odl
+  - schema/actions.odl
+
+actions:
+  - actions/flag-transaction.yaml
+  - actions/open-case.yaml
+  - actions/assign-alert-to-case.yaml
+  - actions/file-report.yaml
+  - actions/submit-report.yaml
+  - actions/freeze-account.yaml
+
+connectors:
+  - connectors/tms-jdbc.yaml
+
+permissions:
+  - permissions/aml-roles.fga

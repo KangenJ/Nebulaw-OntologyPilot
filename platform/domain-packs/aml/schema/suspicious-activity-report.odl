@@ -1,0 +1,17 @@
+# AML Domain Pack — SuspiciousActivityReport ObjectType
+#
+# Regulatory filing submitted to FinCEN or equivalent authority.
+# caseRef is a FK reference to the originating Case.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type SuspiciousActivityReport @objectType {
+  id: ID! @primary
+  sarNumber: String! @unique @indexed @immutable
+  status: SarStatus!
+  filingDate: DateTime!
+  narrative: String!
+  amount: Float! @constraint(expr: "value > 0")
+  reportingEntity: String!
+  caseRef: String! @indexed
+}

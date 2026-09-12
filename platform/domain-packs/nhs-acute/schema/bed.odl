@@ -1,0 +1,14 @@
+# NHS Acute Domain Pack — Bed ObjectType
+#
+# Per MVP Section 4.1. Includes BedType and BedStatus enums (defined in enums.odl).
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type Bed @objectType {
+  id: ID! @primary
+  number: String! @indexed
+  type: BedType!
+  status: BedStatus!
+  ward: Ward! @link(type: "BedInWard", direction: OUTBOUND)
+  patient: Patient @link(type: "OccupiesBed", direction: INBOUND)
+}

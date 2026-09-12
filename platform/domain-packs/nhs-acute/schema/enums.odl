@@ -1,0 +1,59 @@
+# NHS Acute Domain Pack — Enumerations
+#
+# Per MVP Section 4.1 / 4.2: shared enums for the nhs.acute namespace.
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+enum PatientStatus {
+  ACTIVE
+  DISCHARGED
+  DECEASED
+  TRANSFERRED
+}
+
+enum TriageCategory {
+  P1_IMMEDIATE
+  P2_URGENT
+  P3_DELAYED
+  P4_EXPECTANT
+}
+
+enum DischargeDestination {
+  HOME
+  CARE_HOME
+  VIRTUAL_WARD
+  TRANSFER
+  DECEASED
+}
+
+enum BedType {
+  STANDARD
+  ICU
+  HDU
+  ISOLATION
+  TROLLEY
+}
+
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  CLEANING
+  OUT_OF_SERVICE
+}
+
+enum CareRole {
+  PRIMARY
+  SECONDARY
+  ON_CALL
+}
+
+# Staff professional category (v0.2.0 B4) — broadens CDM Practitioner coverage
+# beyond Consultant.
+enum StaffRole {
+  NURSE
+  PHYSICIAN
+  ALLIED_HEALTH_PROFESSIONAL
+  HEALTHCARE_ASSISTANT
+  ADMINISTRATIVE
+  PORTER
+}

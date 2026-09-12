@@ -1,0 +1,32 @@
+{
+  "name": "@openfoundry/spi-conformance",
+  "version": "0.0.1",
+  "description": "SPI conformance test suite - provider-agnostic verification",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:memory": "vitest run --reporter=verbose",
+    "clean": "rm -rf dist coverage"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@openfoundry/spi": "workspace:*"
+  },
+  "devDependencies": {
+    "@openfoundry/storage-memory": "workspace:*",
+    "vitest": "^3.2.7"
+  }
+}

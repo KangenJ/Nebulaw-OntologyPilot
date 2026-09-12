@@ -1,0 +1,69 @@
+# actions/discharge-patient.yaml
+action: DischargePatient
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "patient.status == 'ACTIVE'"
+    error: "Patient is not currently active"
+  - expr: "patient.currentWard != null"
+    error: "Patient is not currently admitted"
+  - expr: "actor.hasRole('clinician') || actor.hasRole('nurse_in_charge')"
+    error: "Only clinicians or nurses in charge can discharge patients"
+
+effects:
+  - type: updateObject
+    target: "patient"
+    set:
+      status: "DISCHARGED"
+
+  # Reset bed status before deleting the link (effects use immutable snapshot,
+  # so patient.currentBed still resolves to the pre-effect bed)
+  - type: updateObject
+    target: "patient.currentBed"
+    condition: "patient.currentBed != null"
+    set:
+      status: "CLEANING"
+
+  - type: deleteLink
+    linkType: "AdmittedTo"
+    filter:
+      from: "patient"
+      active: true
+    expect: ONE
+
+  - type: deleteLink
+    linkType: "OccupiesBed"
+    filter:
+      from: "patient"
+      active: true
+    expect: ALL
+
+  - type: deleteLink
+    linkType: "UnderCareOf"
+    filter:
+      from: "patient"
+      active: true
+    expect: ALL
+
+  - type: createObject
+    objectType: "DischargeRecord"
+    properties:
+      patient: "patient"
+      ward: "patient.currentWard"
+      destination: "params.destination"
+      dischargeDate: "now"
+      notes: "params.notes"
+
+sideEffects:
+  - name: emitDischargeEvent
+    type: event
+    config:
+      type: "nhs.acute.patient.discharged"
+      data:
+        patientId: "patient.id"
+        ward: "patient.currentWard.name"
+        destination: "params.destination"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

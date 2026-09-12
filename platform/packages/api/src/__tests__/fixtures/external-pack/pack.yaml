@@ -1,0 +1,23 @@
+name: test-external
+version: 0.1.0
+namespace: test.external
+description: "Minimal external pack fixture for CI testing"
+
+dependencies:
+  openfoundry.core: ">=1.0.0"
+
+schema:
+  - schema/widget.odl
+  - schema/actions.odl
+
+actions:
+  - actions/activate-widget.yaml
+
+connectors:
+  - connectors/widget-rest.yaml
+
+permissions:
+  - permissions/widget-roles.fga
+
+seed:
+  - seed/bootstrap.yaml

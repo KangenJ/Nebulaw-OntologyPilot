@@ -1,0 +1,35 @@
+# Opt-in reviewed extension. Never applied by reading an object or loading v1.
+extend type InvestigationTask {
+  priorityEffectiveAt: DateTime
+  priorityRecordedAt: DateTime
+}
+type TaskPriorityChange @objectType {
+  id: ID! @primary
+  changeKey: String! @unique @immutable
+  taskVersion: Int! @immutable
+  previousPriority: RiskBand! @immutable
+  priority: RiskBand! @immutable
+  previousEffectiveAt: DateTime! @immutable
+  previousRecordedAt: DateTime! @immutable
+  effectiveAt: DateTime! @immutable
+  recordedAt: DateTime! @immutable
+  recordedBy: String! @immutable
+  reason: String! @immutable @sensitive
+  workspaceKey: String! @immutable
+  classification: PlusClassification! @immutable
+}
+type TaskPriorityChanges @linkType(from:"InvestigationTask",to:"TaskPriorityChange",cardinality:ONE_TO_MANY) {id:ID! @primary}
+type NativeSetTaskPriority @actionType(permission:"can_investigate") {
+  task: InvestigationTask! @param
+  expectedVersion: Int! @param
+  priority: RiskBand! @param
+  previousPriority: RiskBand! @param
+  previousEffectiveAt: DateTime! @param
+  previousRecordedAt: DateTime! @param
+  effectiveAt: DateTime! @param
+  reason: String! @param
+  classification: PlusClassification! @param
+  commandKey: String! @param
+  commandHash: String! @param
+  traceId: String! @param
+}

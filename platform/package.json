@@ -1,0 +1,46 @@
+{
+  "name": "silmaril",
+  "version": "0.2.3",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Open Foundry \u2014 an open-source ontology platform for operational digital twins",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "demo:plus": "bash ../ops/start.sh",
+    "demo:plus:test": "node ../ops/acceptance.mjs",
+    "demo:plus:browser": "node ../ops/browser-acceptance.mjs",
+    "build": "turbo run build",
+    "test": "turbo run test --filter=!@openfoundry/integration-tests",
+    "test:integration": "turbo run test --filter=@openfoundry/integration-tests",
+    "test:all": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "typecheck": "turbo run typecheck",
+    "demo:lwm": "pnpm --filter @openfoundry/lwm-demo-app start",
+    "demo:lwm:platform": "pnpm --filter @openfoundry/lwm-demo-app platform",
+    "demo:lwm:test": "pnpm --filter @openfoundry/lwm-demo-app test && pnpm --filter @openfoundry/domain-pack-lwm-demo test"
+  },
+  "devDependencies": {
+    "turbo": "^2.10.11",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "protobufjs": "^7.5.6",
+      "axios": "^1.18.0",
+      "path-to-regexp@0.1.12": "0.1.13",
+      "@grpc/grpc-js": "^1.14.4",
+      "form-data": "^4.0.6",
+      "ws": "^8.21.0",
+      "@opentelemetry/propagator-jaeger": "^2.9.0",
+      "nanoid": "^3.3.18",
+      "picomatch": "^4.0.4",
+      "postcss": "^8.5.18",
+      "rollup": "^4.59.0",
+      "vite": "^7.3.5"
+    }
+  }
+}

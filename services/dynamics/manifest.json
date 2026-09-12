@@ -1,0 +1,19 @@
+{
+  "version": "local-dynamics-v1-p36b61-bayes32",
+  "status": "mechanism-reference-engineering-demo",
+  "neuralArchitecture": "CoefficientNetwork: 24164 parameters, shared demonstration encoding and four-coefficient readout, no attention/tokenizer",
+  "checkpoint": "var/models/p36b-seed61.pt",
+  "sha256": "92579351b915f59550c56af870d14d66e554b734f7c6f9cb31a0d94b2733cd04",
+  "provenance": "Read-only copy of artifacts/p36b_optimization_dev_seed61_r1/coefficient_final.pt from the original experiment; no retraining or checkpoint selection performed",
+  "referenceMethods": ["P36b frozen seed61 behavior mechanism", "P40 hybrid candidate", "P39 uniform 32-member observation prior", "P38 fixed-kernel short-chain propagation", "Explicit public H-to-E rule"],
+  "observationModule": "Analytical Bayes32 with uniform member prior, not a learned H network",
+  "supportedHorizons": [2, 3],
+  "onlineNeuralTraining": false,
+  "governedOfflineHeadTraining": true,
+  "updatedParameters": 260,
+  "updateScope": "Only coefficient_readout.4 weight and bias; immutable candidate JSON artifacts; baseline checkpoint, other neural layers, analytical H and E remain unchanged",
+  "releaseGate": "Independent owner, native qualified provenance, deterministic retraining and evaluation before atomic registry selection; no automatic online mutation",
+  "productionValidated": false,
+  "generalLwm": false,
+  "runtimeImportsExperiment": false
+}

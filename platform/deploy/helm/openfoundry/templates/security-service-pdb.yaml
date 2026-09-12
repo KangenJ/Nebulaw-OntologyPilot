@@ -1,0 +1,14 @@
+{{- if gt (int .Values.securityService.replicaCount) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-security-service
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: security-service
+spec:
+  minAvailable: {{ .Values.securityService.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "openfoundry.selectorLabels" (dict "name" "security-service" "release" .Release.Name) | nindent 6 }}
+{{- end }}

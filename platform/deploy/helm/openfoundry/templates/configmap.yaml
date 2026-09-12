@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-config
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+data:
+  STORAGE_PROVIDER: {{ .Values.storage.provider | quote }}
+  POSTGRES_HOST: {{ .Values.storage.postgres.host | quote }}
+  POSTGRES_PORT: {{ .Values.storage.postgres.port | quote }}
+  POSTGRES_DB: {{ .Values.storage.postgres.database | quote }}
+  {{- if .Values.eventBus.redpanda.bootstrapServers }}
+  REDPANDA_BROKERS: {{ .Values.eventBus.redpanda.bootstrapServers | quote }}
+  {{- end }}
+  {{- if .Values.redis.url }}
+  REDIS_URL: {{ .Values.redis.url | quote }}
+  {{- end }}
+  OIDC_ISSUER: {{ .Values.auth.oidc.issuer | quote }}
+  {{/* HELM-05: OIDC_CLIENT_ID moved to deployment env from secret if sensitive,
+       kept in ConfigMap as it is typically a public client identifier */}}
+  OIDC_CLIENT_ID: {{ .Values.auth.oidc.clientId | quote }}
+  {{- if .Values.auth.oidc.jwksUri }}
+  OIDC_JWKS_URI: {{ .Values.auth.oidc.jwksUri | quote }}
+  {{- end }}
+  {{- if .Values.auth.oidc.defaultTenant }}
+  OIDC_DEFAULT_TENANT: {{ .Values.auth.oidc.defaultTenant | quote }}
+  {{- end }}
+  OPENFGA_URL: {{ .Values.authz.openfga.url | quote }}
+  {{/* HELM-06: OPENFGA_STORE_ID is infrastructure config, not a secret */}}
+  OPENFGA_STORE_ID: {{ .Values.authz.openfga.storeId | quote }}
+  CEL_EVALUATOR_URL: {{ .Values.celEvaluator.url | quote }}
+  DEBEZIUM_URL: {{ .Values.sync.debezium.url | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.observability.otlp.endpoint | quote }}
+  DOMAIN_PACKS: {{ .Values.domainPacks | toJson | quote }}
+  {{- if .Values.domainPacksExtra.sources }}
+  {{- $paths := list }}
+  {{- range .Values.domainPacksExtra.sources }}
+  {{- $paths = append $paths .mountPath }}
+  {{- end }}
+  DOMAIN_PACKS_EXTRA_DIRS: {{ $paths | join ":" | quote }}
+  {{- end }}
+  NODE_ENV: {{ .Values.nodeEnv | default "production" | quote }}
+  {{- if .Values.cors.allowedOrigins }}
+  CORS_ALLOWED_ORIGINS: {{ .Values.cors.allowedOrigins | join "," | quote }}
+  {{- end }}
+  {{- if .Values.fhirBaseUrl }}
+  FHIR_BASE_URL: {{ .Values.fhirBaseUrl | quote }}
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.relationshipGranterRoles }}
+  RELATIONSHIP_GRANTER_ROLES: {{ .Values.governance.relationshipGranterRoles | join "," | quote }}
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.consentRecorderRoles }}
+  CONSENT_RECORDER_ROLES: {{ .Values.governance.consentRecorderRoles | join "," | quote }}
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.consentPurposes }}
+  CONSENT_PURPOSES: {{ .Values.governance.consentPurposes | join "," | quote }}
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.defaultConsentPurpose }}
+  DEFAULT_CONSENT_PURPOSE: {{ .Values.governance.defaultConsentPurpose | quote }}
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.consentSubjectTypes }}
+  CONSENT_SUBJECT_TYPES: {{ .Values.governance.consentSubjectTypes | join "," | quote }}
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.directCareExemption }}
+  CONSENT_DIRECT_CARE_EXEMPTION: "true"
+  {{- end }}
+  {{- if and .Values.governance .Values.governance.exemptionPurpose }}
+  CONSENT_EXEMPTION_PURPOSE: {{ .Values.governance.exemptionPurpose | quote }}
+  {{- end }}

@@ -1,0 +1,303 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user"
+    },
+    {
+      "type": "ward",
+      "relations": {
+        "assigned": {
+          "this": {}
+        },
+        "viewer": {
+          "computedUserset": {
+            "relation": "assigned"
+          }
+        },
+        "editor": {
+          "computedUserset": {
+            "relation": "assigned"
+          }
+        },
+        "porter": {
+          "this": {}
+        }
+      },
+      "metadata": {
+        "relations": {
+          "assigned": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "porter": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "patient",
+      "relations": {
+        "admitted_to": {
+          "this": {}
+        },
+        "viewer": {
+          "tupleToUserset": {
+            "tupleset": {
+              "relation": "admitted_to"
+            },
+            "computedUserset": {
+              "relation": "viewer"
+            }
+          }
+        },
+        "editor": {
+          "tupleToUserset": {
+            "tupleset": {
+              "relation": "admitted_to"
+            },
+            "computedUserset": {
+              "relation": "editor"
+            }
+          }
+        },
+        "clinician": {
+          "this": {}
+        },
+        "nurse_in_charge": {
+          "this": {}
+        },
+        "admin": {
+          "this": {}
+        },
+        "can_admit": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "clinician"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "nurse_in_charge"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_discharge": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "clinician"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "nurse_in_charge"
+                }
+              }
+            ]
+          }
+        },
+        "can_transfer": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "clinician"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "nurse_in_charge"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "admitted_to": {
+            "directly_related_user_types": [
+              {
+                "type": "ward"
+              }
+            ]
+          },
+          "clinician": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "nurse_in_charge": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "admin": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "bed",
+      "relations": {
+        "bed_in_ward": {
+          "this": {}
+        },
+        "viewer": {
+          "tupleToUserset": {
+            "tupleset": {
+              "relation": "bed_in_ward"
+            },
+            "computedUserset": {
+              "relation": "viewer"
+            }
+          }
+        },
+        "editor": {
+          "tupleToUserset": {
+            "tupleset": {
+              "relation": "bed_in_ward"
+            },
+            "computedUserset": {
+              "relation": "editor"
+            }
+          }
+        },
+        "can_clean": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "editor"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "tupleset": {
+                    "relation": "bed_in_ward"
+                  },
+                  "computedUserset": {
+                    "relation": "porter"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "bed_in_ward": {
+            "directly_related_user_types": [
+              {
+                "type": "ward"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "consultant",
+      "relations": {
+        "viewer": {
+          "this": {}
+        },
+        "owner": {
+          "this": {}
+        }
+      },
+      "metadata": {
+        "relations": {
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "owner": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "discharge_record",
+      "relations": {
+        "clinician": {
+          "this": {}
+        },
+        "nurse_in_charge": {
+          "this": {}
+        },
+        "viewer": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "clinician"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "nurse_in_charge"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "clinician": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "nurse_in_charge": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

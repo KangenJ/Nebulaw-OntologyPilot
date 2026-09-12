@@ -1,0 +1,46 @@
+# AML Domain Pack — Action Types
+#
+# Defines the GraphQL/REST input schema for domain actions.
+# Operational behavior (preconditions, effects, side effects) is in actions/*.yaml.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type FlagTransaction @actionType {
+  transaction: Transaction! @param
+  customer: Customer! @param
+  alertNumber: String! @param
+  severity: AlertSeverity! @param
+  ruleName: String! @param
+  score: Float @param
+  narrative: String @param
+}
+
+type OpenCase @actionType {
+  caseNumber: String! @param
+  priority: AlertSeverity! @param
+  assignedAnalyst: String! @param
+  summary: String @param
+}
+
+type AssignAlertToCase @actionType(permission: "can_assign") {
+  alert: Alert! @param
+  investigationCase: Case! @param
+}
+
+type FreezeAccount @actionType {
+  account: Account! @param
+  reason: String! @param
+}
+
+type FileReport @actionType {
+  investigationCase: Case! @param
+  sarNumber: String! @param
+  narrative: String! @param
+  amount: Float! @param
+  reportingEntity: String! @param
+}
+
+type SubmitReport @actionType(permission: "can_submit") {
+  sar: SuspiciousActivityReport! @param
+  investigationCase: Case! @param
+}

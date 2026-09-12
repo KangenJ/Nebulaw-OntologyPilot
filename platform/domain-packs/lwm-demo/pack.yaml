@@ -1,0 +1,37 @@
+name: lwm-demo
+version: 0.1.0
+description: "Governed Legal World Model demo — synthetic matters, model proposals, human review, feedback, and controlled promotion"
+namespace: lwm.demo
+
+dependencies:
+  openfoundry.core: ">=1.0.0"
+
+provides:
+  objectTypes: 8
+  linkTypes: 7
+  actionTypes: 7
+  functions: 0
+  connectors: 0
+  widgets: 0
+  qualityRules: 0
+
+schema:
+  - schema/enums.odl
+  - schema/objects.odl
+  - schema/links.odl
+  - schema/actions.odl
+
+actions:
+  - actions/approve-transition.yaml
+  - actions/reject-transition.yaml
+  - actions/request-evidence.yaml
+  - actions/complete-investigation-task.yaml
+  - actions/promote-model.yaml
+  - actions/rollback-model.yaml
+  - actions/hold-model.yaml
+
+seed:
+  - seeds/demo-data.yaml
+
+permissions:
+  - permissions/lwm-roles.fga

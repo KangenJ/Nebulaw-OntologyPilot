@@ -1,0 +1,24 @@
+name: lwm-plus
+version: 0.1.0
+description: "Native governed demo integration; manual proposals, not research LWM"
+namespace: lwm.plus
+dependencies:
+  openfoundry.core: ">=1.0.0"
+  lwm.demo: ">=0.1.0"
+provides:
+  objectTypes: 8
+  linkTypes: 0
+  actionTypes: 5
+  functions: 0
+  connectors: 0
+  widgets: 0
+  qualityRules: 0
+schema:
+  - schema/native.odl
+  - schema/workbenches.odl
+actions:
+  - actions/native-import.yaml
+  - actions/native-verify.yaml
+  - actions/native-propose.yaml
+  - actions/native-review.yaml
+  - actions/native-plus.yaml

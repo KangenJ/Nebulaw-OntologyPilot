@@ -1,0 +1,4 @@
+# Opt-in v2 bridge only. RuleVersion lifecycle is not Plus specification approval.
+type TaskRuleSpecificationSource @linkType(from:"PlusRuleSpecification",to:"RuleVersion",cardinality:MANY_TO_MANY) {
+  id: ID! @primary
+}

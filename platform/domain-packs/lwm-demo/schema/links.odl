@@ -1,0 +1,36 @@
+extend schema @namespace(name: "lwm.demo", version: "0.1.0")
+
+type MatterObservation @linkType(from: "Matter", to: "Observation", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}
+
+type MatterProposal @linkType(from: "Matter", to: "TransitionProposal", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}
+
+type ProposalReview @linkType(from: "TransitionProposal", to: "HumanReview", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}
+
+type MatterTask @linkType(from: "Matter", to: "InvestigationTask", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}
+
+type ModelProposal @linkType(from: "ModelVersion", to: "TransitionProposal", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}
+
+type ReviewFeedback @linkType(from: "HumanReview", to: "FeedbackEvent", cardinality: ONE_TO_ONE) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}
+
+type ModelFeedback @linkType(from: "ModelVersion", to: "FeedbackEvent", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+  linkedAt: DateTime!
+}

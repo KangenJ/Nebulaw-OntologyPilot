@@ -1,0 +1,35 @@
+# NHS Acute Domain Pack — LinkTypes
+#
+# Per MVP Section 4.2. Defines the 6 link types for the NHS acute pilot.
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type AdmittedTo @linkType(from: "Patient", to: "Ward", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+  admissionDate: DateTime!
+  expectedDischarge: DateTime
+  reason: String
+}
+
+type OccupiesBed @linkType(from: "Patient", to: "Bed", cardinality: ONE_TO_ONE) {
+  id: ID! @primary
+  assignedAt: DateTime!
+}
+
+type UnderCareOf @linkType(from: "Patient", to: "Consultant", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+  assignedDate: DateTime!
+  role: CareRole!
+}
+
+type BedInWard @linkType(from: "Bed", to: "Ward", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}
+
+type DischargedPatient @linkType(from: "DischargeRecord", to: "Patient", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}
+
+type DischargedFromWard @linkType(from: "DischargeRecord", to: "Ward", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}

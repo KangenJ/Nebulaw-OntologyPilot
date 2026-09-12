@@ -1,0 +1,20 @@
+# AML Domain Pack — Case ObjectType
+#
+# Investigation case grouping related alerts. Analysts review
+# cases and may file SARs if suspicious activity is confirmed.
+# alertCount is computed from the AlertCase link.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type Case @objectType {
+  id: ID! @primary
+  caseNumber: String! @unique @indexed @immutable
+  status: CaseStatus!
+  priority: AlertSeverity!
+  assignedAnalyst: String! @indexed
+  summary: String
+  openDate: DateTime!
+  closeDate: DateTime
+  alertCount: Int @computed(fn: "countLinks", args: { type: "AlertCase" }, cache: LAZY)
+  alerts: [Alert!]! @link(type: "AlertCase", direction: INBOUND)
+}

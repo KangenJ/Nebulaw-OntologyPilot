@@ -1,0 +1,51 @@
+model
+  schema 1.1
+
+type user
+
+type facility
+  relations
+    define assigned: [user]
+    define viewer: assigned
+    define editor: assigned
+
+type supplier
+  relations
+    define viewer: [user]
+    define editor: [user]
+    define can_create: editor
+
+type product
+  relations
+    define viewer: [user]
+    define editor: [user]
+
+type purchase_order
+  relations
+    define ordered_from: [supplier]
+    define viewer: [user] or viewer from ordered_from
+    define editor: [user]
+    define procurement_manager: [user]
+    define supply_chain_admin: [user]
+    define can_create: procurement_manager or supply_chain_admin
+    define can_ship: logistics_manager or supply_chain_admin
+    define can_cancel: procurement_manager or supply_chain_admin
+    define logistics_manager: [user]
+
+type shipment
+  relations
+    define ships_to: [facility]
+    define viewer: [user] or viewer from ships_to
+    define editor: [user]
+    define logistics_manager: [user]
+    define warehouse_manager: [user]
+    define supply_chain_admin: [user]
+    define can_receive: warehouse_manager or logistics_manager or supply_chain_admin
+
+type inventory_record
+  relations
+    define at_facility: [facility]
+    define viewer: viewer from at_facility
+    define editor: editor from at_facility
+    define warehouse_manager: [user]
+    define can_adjust: warehouse_manager or editor

@@ -1,0 +1,49 @@
+# NHS Acute Domain Pack — Action Types
+#
+# Defines the GraphQL/REST input schema for domain actions.
+# Operational behavior (preconditions, effects, side effects) is in actions/*.yaml.
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type AdmitPatient @actionType {
+  patient: Patient! @param
+  ward: Ward! @param
+  bed: Bed @param
+  consultant: Consultant! @param
+  reason: String @param
+}
+
+type DischargePatient @actionType {
+  patient: Patient! @param
+  destination: DischargeDestination! @param
+  notes: String @param
+}
+
+type TransferWard @actionType(permission: "can_transfer") {
+  patient: Patient! @param
+  toWard: Ward! @param
+  toBed: Bed @param
+  reason: String @param
+}
+
+# Returns a bed from CLEANING to AVAILABLE — completes the bed lifecycle the
+# discharge/transfer actions only half-model (both leave the vacated bed
+# CLEANING). A legitimate porter / housekeeping action. Verb "Clean" + type
+# "Bed" → can_clean on bed (consistent across runtime + codegen derivation).
+type CleanBed @actionType {
+  bed: Bed! @param
+}
+
+# Governed patient registration (ED arrival). Creates a Patient in DISCHARGED
+# (awaiting-bed) state and, by default, records DIRECT_CARE consent (opt out
+# with consent: false). No object @param → role-gated by CEL (receptionist /
+# clinician / nurse_in_charge), not ReBAC (nothing exists to authorize against
+# pre-creation).
+type RegisterPatient @actionType {
+  name: String! @param
+  dateOfBirth: Date! @param
+  nhsNumber: String @param
+  triageCategory: TriageCategory @param
+  presentingComplaint: String @param
+  consent: Boolean @param
+}

@@ -1,0 +1,60 @@
+model
+  schema 1.1
+
+type user
+
+type customer
+  relations
+    define compliance_analyst: [user]
+    define compliance_officer: [user]
+    define bsa_officer: [user]
+    define viewer: compliance_analyst or compliance_officer or bsa_officer
+    define can_edit_risk: compliance_officer
+
+type account
+  relations
+    define owner: [customer]
+    define compliance_analyst: [user]
+    define compliance_officer: [user]
+    define bsa_officer: [user]
+    define viewer: compliance_analyst or compliance_officer or bsa_officer
+    define can_freeze: compliance_officer or bsa_officer
+
+type transaction
+  relations
+    define source_account: [account]
+    define compliance_analyst: [user]
+    define compliance_officer: [user]
+    define bsa_officer: [user]
+    define viewer: compliance_analyst or compliance_officer or bsa_officer
+    define can_flag: compliance_analyst or compliance_officer
+
+type alert
+  relations
+    define assigned_to: [user]
+    define compliance_analyst: [user]
+    define compliance_officer: [user]
+    define bsa_officer: [user]
+    define viewer: compliance_analyst or compliance_officer or assigned_to or bsa_officer
+    define can_investigate: compliance_analyst or compliance_officer
+    define can_assign: compliance_analyst or compliance_officer
+    define can_escalate: compliance_officer
+
+type case
+  relations
+    define assigned_analyst: [user]
+    define compliance_analyst: [user]
+    define compliance_officer: [user]
+    define bsa_officer: [user]
+    define viewer: assigned_analyst or compliance_analyst or compliance_officer or bsa_officer
+    define can_open: compliance_analyst or compliance_officer
+    define can_review: assigned_analyst or compliance_analyst or compliance_officer
+    define can_close: compliance_officer or bsa_officer
+    define can_file_report: compliance_officer or bsa_officer
+
+type suspicious_activity_report
+  relations
+    define compliance_officer: [user]
+    define bsa_officer: [user]
+    define viewer: compliance_officer or bsa_officer
+    define can_submit: bsa_officer

@@ -1,0 +1,19 @@
+apiVersion: v2
+name: openfoundry
+description: Open Foundry — an ontology platform for operational digital twins
+type: application
+# Chart version tracks the platform release it deploys; both are set by the
+# release workflow so a chart can never advertise a version it does not deploy.
+version: 0.2.3
+appVersion: "0.2.3"
+keywords:
+  - openfoundry
+  - ontology
+  - digital-twin
+  - knowledge-graph
+  - authorization
+home: https://github.com/syzygyhack/open-foundry
+sources:
+  - https://github.com/syzygyhack/open-foundry
+maintainers:
+  - name: Syzygy

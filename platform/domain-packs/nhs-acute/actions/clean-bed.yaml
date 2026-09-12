@@ -1,0 +1,35 @@
+# actions/clean-bed.yaml
+#
+# Authorization is ward-scoped via OpenFGA: the pipeline checks `can_clean` on
+# the target bed BEFORE these preconditions run, and `can_clean = editor or
+# porter from bed_in_ward` (see nhs-roles.fga). So a ward-assigned staff member
+# (nurse/clinician) or a ward porter is authorised. We deliberately do NOT add
+# a global-role CEL gate here: `actor.hasRole('clinician')` would check a
+# different axis (token role claim) than FGA grants (ward assignment), and a
+# clinician without a ward tuple would be denied by FGA before the CEL check —
+# making the manifest lie about who can act. Preconditions assert state only.
+action: CleanBed
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "bed.status == 'CLEANING'"
+    error: "Bed is not awaiting cleaning"
+
+effects:
+  - type: updateObject
+    target: "bed"
+    set:
+      status: "AVAILABLE"
+
+sideEffects:
+  - name: emitBedReadyEvent
+    type: event
+    config:
+      type: "nhs.acute.bed.ready"
+      data:
+        bedId: "bed.id"
+        wardId: "bed.ward.id"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

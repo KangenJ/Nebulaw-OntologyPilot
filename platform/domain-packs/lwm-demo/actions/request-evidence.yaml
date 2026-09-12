@@ -1,0 +1,59 @@
+action: RequestEvidence
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "proposal.workspaceKey == matter.workspaceKey"
+    error: "Proposal and matter must belong to the same workspace"
+  - expr: "proposal.status == 'PENDING'"
+    error: "Evidence can only be requested for a pending proposal"
+  - expr: "actor.hasRole('case_reviewer') || actor.hasRole('admin')"
+    error: "Only case reviewers or admins can request evidence"
+
+effects:
+  - type: updateObject
+    target: "proposal"
+    set:
+      status: "NEEDS_EVIDENCE"
+      gateStatus: "BLOCKED"
+      gateReason: "Evidence task is open"
+
+  - type: updateObject
+    target: "matter"
+    set:
+      status: "NEEDS_EVIDENCE"
+
+  - type: createObject
+    objectType: "InvestigationTask"
+    properties:
+      workspaceKey: "matter.workspaceKey"
+      taskNumber: "params.taskNumber"
+      title: "params.title"
+      status: "OPEN"
+      priority: "params.priority"
+      assignee: "params.assignee"
+      instructions: "params.instructions"
+      dueAt: "params.dueAt"
+      createdAt: "now"
+
+  - type: createLink
+    linkType: "MatterTask"
+    from: "matter"
+    to: "investigationTask"
+    properties:
+      linkedAt: "now"
+
+sideEffects:
+  - name: emitEvidenceRequested
+    type: event
+    config:
+      type: "lwm.demo.evidence.requested"
+      data:
+        proposalNumber: "proposal.proposalNumber"
+        matterNumber: "matter.matterNumber"
+        taskNumber: "params.taskNumber"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

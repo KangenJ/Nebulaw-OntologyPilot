@@ -1,0 +1,6 @@
+extend schema @namespace(name: "test.external", version: "0.1.0")
+
+type ActivateWidget @actionType {
+  widget: Widget! @param
+  reason: String @param
+}

@@ -1,0 +1,83 @@
+action: NativeReviewTransition
+version: 1
+reversible: false
+preconditions:
+  - expr: "actor.hasRole('case_reviewer')"
+    error: "Review requires case reviewer"
+  - expr: "matter != null && proposal != null && observation != null && matter._version == params.expectedVersion"
+    error: "Object missing or matter version conflict"
+  - expr: "proposal.matter.id == matter.id && observation.matter.id == matter.id && proposal.basisObservationId == observation.id"
+    error: "Proposal and evidence must belong to the same matter"
+  - expr: "proposal.status == 'PENDING' && matter.currentState == proposal.fromState"
+    error: "Proposal already resolved or state conflict"
+  - expr: "proposal.proposedBy != actor.id"
+    error: "Proposer cannot approve own proposal"
+  - expr: "params.decision in ['APPROVE', 'REJECT']"
+    error: "Unsupported review decision"
+  - expr: "params.decision == 'REJECT' || (observation.verified && observation._version == proposal.basisObservationVersion)"
+    error: "Approval evidence changed or is unverified"
+effects:
+  - type: updateObject
+    target: proposal
+    condition: "params.decision == 'APPROVE'"
+    set:
+      status: APPROVED
+  - type: updateObject
+    target: proposal
+    condition: "params.decision == 'REJECT'"
+    set:
+      status: REJECTED
+  - type: updateObject
+    target: matter
+    condition: "params.decision == 'APPROVE'"
+    set:
+      currentState: proposal.toState
+      status: DECIDED
+  - type: createObject
+    objectType: HumanReview
+    properties:
+      workspaceKey: lwm-demo
+      reviewNumber: params.commandKey
+      title: params.commandKey
+      reviewer: actor.id
+      decision: params.decision
+      previousState: proposal.fromState
+      note: params.note
+      reviewedAt: now
+  - type: createLink
+    linkType: ProposalReview
+    from: proposal
+    to: humanReview
+    properties:
+      linkedAt: now
+  - type: createObject
+    objectType: FeedbackEvent
+    properties:
+      workspaceKey: lwm-demo
+      eventNumber: params.commandKey
+      title: params.commandKey
+      outcome: CORRECTED
+      label: params.decision
+      reason: params.note
+      eligibility: HELD
+      modelVersion: "none-human-authored"
+      createdAt: now
+  - type: createLink
+    linkType: ReviewFeedback
+    from: humanReview
+    to: feedbackEvent
+    properties:
+      linkedAt: now
+  - type: createObject
+    objectType: NativeCommandReceipt
+    properties:
+      commandKey: params.commandKey
+      commandHash: params.commandHash
+      actorId: actor.id
+      actionName: NativeReviewTransition
+      resultType: HumanReview
+      resultId: humanReview._id
+      traceId: params.traceId
+      createdAt: now
+
+sideEffects: []

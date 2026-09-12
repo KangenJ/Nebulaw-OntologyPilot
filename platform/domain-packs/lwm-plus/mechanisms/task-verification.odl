@@ -1,0 +1,66 @@
+# Applied explicitly through the reviewed bundle migration, never the v1 pack loader.
+enum TaskCompletion { UNKNOWN DONE NOT_DONE }
+enum TaskVerificationMode { GOLD NOISY }
+
+extend type InvestigationTask {
+  actualCompletion: TaskCompletion
+  actualCompletionAt: DateTime
+  actualCompletionRecordedAt: DateTime
+  receivedAt: DateTime @immutable
+  registeredBy: String @immutable
+  dataClassification: PlusClassification @immutable
+  reports: [Observation!]! @link(type:"TaskObservation",direction:OUTBOUND)
+}
+extend type Observation {
+  reportedCompletion: TaskCompletion @immutable @sensitive
+  receivedAt: DateTime @immutable
+  channelKey: String @immutable
+  sourceSystem: String @immutable
+  sourceRecordId: String @immutable @sensitive
+  sourceRevision: String @immutable
+  sourceEventKey: String @unique @immutable
+  sourceContentHash: String @immutable
+  dataClassification: PlusClassification @immutable
+}
+type TaskCompletionVerification @objectType {
+  id: ID! @primary
+  verificationKey: String! @unique @immutable
+  taskVersion: Int! @immutable
+  observationVersion: Int! @immutable
+  result: TaskCompletion! @immutable
+  targetTime: DateTime! @immutable
+  recordedAt: DateTime! @immutable
+  recordedBy: String! @immutable
+  methodKey: String! @immutable
+  mode: TaskVerificationMode! @immutable
+  evidence: String! @immutable @sensitive
+  classification: PlusClassification! @immutable
+}
+type TaskObservation @linkType(from:"InvestigationTask",to:"Observation",cardinality:ONE_TO_MANY) {id:ID! @primary}
+type TaskCompletionCheck @linkType(from:"InvestigationTask",to:"TaskCompletionVerification",cardinality:ONE_TO_MANY) {id:ID! @primary}
+type ObservationCompletionCheck @linkType(from:"Observation",to:"TaskCompletionVerification",cardinality:ONE_TO_MANY) {id:ID! @primary}
+type TaskPlusEpisode @linkType(from:"InvestigationTask",to:"PlusEpisode",cardinality:ONE_TO_MANY) {id:ID! @primary}
+type TaskPlusEvent @linkType(from:"InvestigationTask",to:"PlusEvent",cardinality:ONE_TO_MANY) {id:ID! @primary}
+type EventSourceObservation @linkType(from:"PlusEvent",to:"Observation",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type EventSourceTaskVerification @linkType(from:"PlusEvent",to:"TaskCompletionVerification",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type TaskVerificationTask @linkType(from:"InvestigationTask",to:"InvestigationTask",cardinality:ONE_TO_MANY) {id:ID! @primary}
+
+type NativeRegisterInvestigationTask @actionType(permission:"can_import") {
+  matter: Matter! @param expectedVersion:Int! @param
+  taskNumber:String! @param title:String! @param priority:RiskBand! @param
+  assignee:String! @param instructions:String! @param dueAt:DateTime! @param
+  classification:PlusClassification! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}
+type NativeRecordTaskObservation @actionType(permission:"can_import") {
+  task:InvestigationTask! @param expectedVersion:Int! @param
+  title:String! @param summary:String! @param reportedCompletion:TaskCompletion @param
+  eventTime:DateTime! @param channelKey:String! @param sourceSystem:String! @param sourceRecordId:String! @param sourceRevision:String! @param
+  sourceEventKey:String! @param sourceContentHash:String! @param classification:PlusClassification! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}
+type NativeVerifyTaskObservation @actionType(permission:"can_verify") {
+  task:InvestigationTask! @param observation:Observation! @param expectedVersion:Int! @param expectedObservationVersion:Int! @param
+  result:TaskCompletion! @param targetTime:DateTime! @param methodKey:String! @param mode:TaskVerificationMode! @param evidence:String! @param classification:PlusClassification! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}

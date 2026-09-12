@@ -1,0 +1,58 @@
+{{/*
+HELM-08: NetworkPolicy to restrict service-to-service communication.
+Only allows traffic between known Open Foundry services and denies all else.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-default-deny
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from within the release
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+    # Allow ingress controller traffic to api-gateway
+    {{- if .Values.ingress.enabled }}
+    - from: []
+      ports:
+        - port: {{ .Values.apiGateway.port }}
+          protocol: TCP
+    {{- end }}
+  egress:
+    # Allow traffic to within the release
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow outbound to external services (PostgreSQL, OpenFGA, OTLP, etc.)
+    - to: []
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 4317
+          protocol: TCP
+        - port: 6379
+          protocol: TCP
+        - port: 9092
+          protocol: TCP
+        - port: 443
+          protocol: TCP

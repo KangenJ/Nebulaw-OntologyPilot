@@ -1,0 +1,21 @@
+# Integration-test compose override.
+#
+# Layered on top of docker-compose.yaml ONLY when running the integration suite
+# (the harness passes both files: -f docker-compose.yaml -f docker-compose.test.yaml).
+# It mounts the test-only fixtures pack into the api-gateway and points
+# DOMAIN_PACKS_EXTRA_DIRS at it, so the stack boots with the reference data the
+# integration tests need (wards/beds/consultants/patients).
+#
+# SEED_TENANT=default makes the boot seed write under the same tenant that
+# dev-mode API requests use ('default'), so seeded objects are readable through
+# the API. Without it, seeds land under 'system' and are invisible to reads.
+#
+# This file is NOT part of a normal `docker compose up` — production/demo stacks
+# never load the fixtures pack.
+services:
+  api-gateway:
+    environment:
+      DOMAIN_PACKS_EXTRA_DIRS: "/fixtures/seed-pack"
+      SEED_TENANT: "default"
+    volumes:
+      - ../tests/integration/fixtures/seed-pack:/fixtures/seed-pack:ro

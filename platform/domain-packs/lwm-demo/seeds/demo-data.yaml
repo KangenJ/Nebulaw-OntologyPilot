@@ -1,0 +1,307 @@
+objects:
+  - type: RuleVersion
+    ref: rule-retention-v3
+    fields:
+      workspaceKey: lwm-demo
+      ruleKey: RULE-RETENTION-V3
+      title: "Retention obligation — version 3"
+      versionTag: "3.0.0"
+      lifecycle: ACTIVE
+      effectiveFrom: "2026-01-01T00:00:00Z"
+      sourceCitation: "Synthetic policy §4.2"
+      deterministic: true
+
+  - type: RuleVersion
+    ref: rule-notice-v2
+    fields:
+      workspaceKey: lwm-demo
+      ruleKey: RULE-NOTICE-V2
+      title: "Supplier notice window — version 2"
+      versionTag: "2.1.0"
+      lifecycle: ACTIVE
+      effectiveFrom: "2026-03-01T00:00:00Z"
+      sourceCitation: "Synthetic contract playbook §7"
+      deterministic: true
+
+  - type: ModelVersion
+    ref: model-active
+    fields:
+      workspaceKey: lwm-demo
+      modelKey: LWM-TRANSITION-0.9.1
+      title: "LWM transition model 0.9.1"
+      versionLabel: "v0.9.1"
+      stage: ACTIVE
+      trainingWindow: "synthetic-2026-q1"
+      validationScore: 0.86
+      calibrationError: 0.11
+      approvedBy: "model-owner@example.test"
+      approvedAt: "2026-08-15T09:00:00Z"
+      createdAt: "2026-08-12T10:00:00Z"
+
+  - type: ModelVersion
+    ref: model-candidate
+    fields:
+      workspaceKey: lwm-demo
+      modelKey: LWM-TRANSITION-0.9.2-RC1
+      title: "LWM transition model 0.9.2-rc1"
+      versionLabel: "v0.9.2-rc1"
+      stage: CANDIDATE
+      trainingWindow: "synthetic-2026-q2"
+      validationScore: 0.89
+      calibrationError: 0.08
+      rollbackTarget: "v0.9.1"
+      createdAt: "2026-09-02T14:30:00Z"
+
+  - type: Matter
+    ref: matter-retention
+    fields:
+      workspaceKey: lwm-demo
+      matterNumber: MAT-2026-014
+      title: "数据保留义务复核"
+      jurisdiction: "Synthetic-CN"
+      status: IN_REVIEW
+      currentState: EVIDENCE_COMPLETE
+      riskBand: HIGH
+      owner: "林岚"
+      summary: "合成案例：供应商终止后是否仍需保留审计材料。"
+      openedAt: "2026-09-01T08:30:00Z"
+      dueAt: "2026-09-06T10:00:00Z"
+
+  - type: Matter
+    ref: matter-notice
+    fields:
+      workspaceKey: lwm-demo
+      matterNumber: MAT-2026-021
+      title: "供应商通知期限判断"
+      jurisdiction: "Synthetic-SG"
+      status: IN_REVIEW
+      currentState: NOTICE_RECEIVED
+      riskBand: MEDIUM
+      owner: "周然"
+      summary: "合成案例：判断通知是否落在约定期限内。"
+      openedAt: "2026-09-02T02:15:00Z"
+      dueAt: "2026-09-07T09:00:00Z"
+
+  - type: Matter
+    ref: matter-employment
+    fields:
+      workspaceKey: lwm-demo
+      matterNumber: MAT-2026-037
+      title: "劳动争议证据完整性"
+      jurisdiction: "Synthetic-EU"
+      status: NEEDS_EVIDENCE
+      currentState: CLAIM_RECEIVED
+      riskBand: CRITICAL
+      owner: "许宁"
+      summary: "合成案例：关键送达凭证缺失，确定性门禁止状态迁移。"
+      openedAt: "2026-09-03T06:45:00Z"
+      dueAt: "2026-09-05T15:00:00Z"
+
+  - type: Observation
+    ref: obs-retention-policy
+    fields:
+      workspaceKey: lwm-demo
+      observationNumber: OBS-014-01
+      title: "保留政策版本已确认"
+      kind: DOCUMENT
+      source: "Synthetic policy registry"
+      summary: "政策第 4.2 节要求终止后保留审计材料 24 个月。"
+      confidence: 1.0
+      verified: true
+      observedAt: "2026-09-01T09:12:00Z"
+
+  - type: Observation
+    ref: obs-retention-termination
+    fields:
+      workspaceKey: lwm-demo
+      observationNumber: OBS-014-02
+      title: "终止日期已核验"
+      kind: EVENT
+      source: "Synthetic contract ledger"
+      summary: "终止事件发生于 2026-08-31，签名链完整。"
+      confidence: 0.98
+      verified: true
+      observedAt: "2026-09-01T09:18:00Z"
+
+  - type: Observation
+    ref: obs-notice-email
+    fields:
+      workspaceKey: lwm-demo
+      observationNumber: OBS-021-01
+      title: "通知邮件时间戳"
+      kind: DOCUMENT
+      source: "Synthetic mail archive"
+      summary: "邮件时间戳与合同通知窗口相差 6 小时。"
+      confidence: 0.94
+      verified: true
+      observedAt: "2026-09-02T03:20:00Z"
+
+  - type: Observation
+    ref: obs-employment-missing
+    fields:
+      workspaceKey: lwm-demo
+      observationNumber: OBS-037-01
+      title: "送达凭证缺失"
+      kind: SYSTEM_SIGNAL
+      source: "Synthetic evidence index"
+      summary: "记录中未发现带签收时间的送达凭证。"
+      confidence: 1.0
+      verified: true
+      observedAt: "2026-09-03T07:05:00Z"
+
+  - type: TransitionProposal
+    ref: proposal-retention
+    fields:
+      workspaceKey: lwm-demo
+      proposalNumber: PRP-2026-014-A
+      title: "进入持续保留状态"
+      fromState: EVIDENCE_COMPLETE
+      toState: RETENTION_REQUIRED
+      status: PENDING
+      riskBand: HIGH
+      confidence: 0.92
+      rationale: "规则版本 3 与终止事件共同满足保留触发条件。"
+      evidenceSummary: "2/2 必要证据已核验。"
+      gateStatus: PASS
+      gateReason: "必要证据、规则有效期和状态前置条件均满足"
+      createdAt: "2026-09-04T01:20:00Z"
+
+  - type: TransitionProposal
+    ref: proposal-notice
+    fields:
+      workspaceKey: lwm-demo
+      proposalNumber: PRP-2026-021-A
+      title: "确认通知及时"
+      fromState: NOTICE_RECEIVED
+      toState: NOTICE_TIMELY
+      status: PENDING
+      riskBand: MEDIUM
+      confidence: 0.81
+      rationale: "通知时间落在约定窗口内，但时区元数据需要人工确认。"
+      evidenceSummary: "主要证据已核验；存在一项低风险时区歧义。"
+      gateStatus: PASS
+      gateReason: "硬性期限门通过；软性时区提示需人工复核"
+      createdAt: "2026-09-04T01:32:00Z"
+
+  - type: TransitionProposal
+    ref: proposal-employment
+    fields:
+      workspaceKey: lwm-demo
+      proposalNumber: PRP-2026-037-A
+      title: "进入答辩准备状态"
+      fromState: CLAIM_RECEIVED
+      toState: RESPONSE_READY
+      status: NEEDS_EVIDENCE
+      riskBand: CRITICAL
+      confidence: 0.74
+      rationale: "现有材料提示可准备答辩，但送达日决定期限计算。"
+      evidenceSummary: "送达凭证缺失；不得计算最终答辩期限。"
+      gateStatus: BLOCKED
+      gateReason: "缺少经核验的送达凭证"
+      createdAt: "2026-09-04T01:40:00Z"
+
+  - type: InvestigationTask
+    ref: task-employment
+    fields:
+      workspaceKey: lwm-demo
+      taskNumber: TSK-2026-037-01
+      title: "补充送达凭证"
+      status: OPEN
+      priority: CRITICAL
+      assignee: "调查组 A"
+      instructions: "获取带签收时间的送达记录，并由第二人复核。"
+      dueAt: "2026-09-05T08:00:00Z"
+      createdAt: "2026-09-04T01:42:00Z"
+
+  - type: HumanReview
+    ref: review-history
+    fields:
+      workspaceKey: lwm-demo
+      reviewNumber: REV-2026-009-H
+      title: "REV-2026-009-H"
+      reviewer: "林岚"
+      decision: MODIFY
+      previousState: FACTS_READY
+      appliedState: MANUAL_REVIEW
+      note: "模型忽略了合成例外条款，人工修正。"
+      reviewedAt: "2026-09-03T12:05:00Z"
+
+  - type: FeedbackEvent
+    ref: feedback-history
+    fields:
+      workspaceKey: lwm-demo
+      eventNumber: FDB-2026-009-H
+      title: "FDB-2026-009-H"
+      outcome: CORRECTED
+      label: MANUAL_REVIEW
+      reason: "合成例外条款优先"
+      eligibility: ELIGIBLE
+      modelVersion: "v0.9.1"
+      createdAt: "2026-09-03T12:05:00Z"
+
+links:
+  - type: MatterObservation
+    from: matter-retention
+    to: obs-retention-policy
+    fields:
+      linkedAt: "2026-09-01T09:12:00Z"
+  - type: MatterObservation
+    from: matter-retention
+    to: obs-retention-termination
+    fields:
+      linkedAt: "2026-09-01T09:18:00Z"
+  - type: MatterObservation
+    from: matter-notice
+    to: obs-notice-email
+    fields:
+      linkedAt: "2026-09-02T03:20:00Z"
+  - type: MatterObservation
+    from: matter-employment
+    to: obs-employment-missing
+    fields:
+      linkedAt: "2026-09-03T07:05:00Z"
+  - type: MatterProposal
+    from: matter-retention
+    to: proposal-retention
+    fields:
+      linkedAt: "2026-09-04T01:20:00Z"
+  - type: MatterProposal
+    from: matter-notice
+    to: proposal-notice
+    fields:
+      linkedAt: "2026-09-04T01:32:00Z"
+  - type: MatterProposal
+    from: matter-employment
+    to: proposal-employment
+    fields:
+      linkedAt: "2026-09-04T01:40:00Z"
+  - type: MatterTask
+    from: matter-employment
+    to: task-employment
+    fields:
+      linkedAt: "2026-09-04T01:42:00Z"
+  - type: ModelProposal
+    from: model-active
+    to: proposal-retention
+    fields:
+      linkedAt: "2026-09-04T01:20:00Z"
+  - type: ModelProposal
+    from: model-active
+    to: proposal-notice
+    fields:
+      linkedAt: "2026-09-04T01:32:00Z"
+  - type: ModelProposal
+    from: model-active
+    to: proposal-employment
+    fields:
+      linkedAt: "2026-09-04T01:40:00Z"
+  - type: ReviewFeedback
+    from: review-history
+    to: feedback-history
+    fields:
+      linkedAt: "2026-09-03T12:05:00Z"
+  - type: ModelFeedback
+    from: model-active
+    to: feedback-history
+    fields:
+      linkedAt: "2026-09-03T12:05:00Z"

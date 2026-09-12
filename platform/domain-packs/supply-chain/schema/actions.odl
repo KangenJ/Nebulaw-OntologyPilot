@@ -1,0 +1,41 @@
+# Supply Chain Domain Pack — Action Types
+#
+# Defines the GraphQL/REST input schema for domain actions.
+# Operational behavior (preconditions, effects, side effects) is in actions/*.yaml.
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+type CreateOrder @actionType(permission: "can_create") {
+  supplier: Supplier! @param
+  product: Product! @param
+  orderNumber: String! @param
+  quantity: Int! @param
+  unitCost: Float! @param
+  currency: String! @param
+  requestedDeliveryDate: DateTime! @param
+  notes: String @param
+}
+
+type ShipOrder @actionType(permission: "can_ship") {
+  order: PurchaseOrder! @param
+  origin: Facility! @param
+  destination: Facility! @param
+  trackingNumber: String @param
+  transportMode: TransportMode! @param
+  estimatedArrival: DateTime! @param
+}
+
+type ReceiveShipment @actionType {
+  shipment: Shipment! @param
+  order: PurchaseOrder! @param
+  destination: Facility! @param
+  product: Product @param
+  inventoryRecord: InventoryRecord @param
+  receivedQuantity: Int! @param
+  stockLevel: StockLevel! @param
+}
+
+type CancelOrder @actionType(permission: "can_cancel") {
+  order: PurchaseOrder! @param
+  reason: String @param
+}

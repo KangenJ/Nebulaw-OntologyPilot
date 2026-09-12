@@ -1,0 +1,126 @@
+- objectType: Matter
+  alwaysVisible:
+    - id
+    - workspaceKey
+    - matterNumber
+    - title
+    - jurisdiction
+    - status
+    - currentState
+    - riskBand
+    - owner
+    - openedAt
+    - dueAt
+  fieldsByRelation:
+    case_reviewer:
+      - summary
+    auditor:
+      - summary
+    admin:
+      - summary
+
+- objectType: Observation
+  alwaysVisible:
+    - id
+    - workspaceKey
+    - observationNumber
+    - title
+    - kind
+    - source
+    - confidence
+    - verified
+    - observedAt
+  fieldsByRelation:
+    investigator:
+      - summary
+    case_reviewer:
+      - summary
+    auditor:
+      - summary
+    admin:
+      - summary
+
+- objectType: TransitionProposal
+  alwaysVisible:
+    - id
+    - workspaceKey
+    - proposalNumber
+    - title
+    - fromState
+    - toState
+    - status
+    - riskBand
+    - confidence
+    - gateStatus
+    - gateReason
+    - createdAt
+  fieldsByRelation:
+    case_reviewer:
+      - rationale
+      - evidenceSummary
+    auditor:
+      - rationale
+      - evidenceSummary
+    admin:
+      - rationale
+      - evidenceSummary
+
+- objectType: HumanReview
+  alwaysVisible:
+    - id
+    - workspaceKey
+    - reviewNumber
+    - title
+    - reviewer
+    - decision
+    - previousState
+    - appliedState
+    - reviewedAt
+  fieldsByRelation:
+    case_reviewer:
+      - note
+    auditor:
+      - note
+    admin:
+      - note
+
+- objectType: InvestigationTask
+  alwaysVisible:
+    - id
+    - workspaceKey
+    - taskNumber
+    - title
+    - status
+    - priority
+    - assignee
+    - dueAt
+    - createdAt
+    - completedAt
+  fieldsByRelation:
+    investigator:
+      - instructions
+    case_reviewer:
+      - instructions
+    auditor:
+      - instructions
+    admin:
+      - instructions
+
+- objectType: FeedbackEvent
+  alwaysVisible:
+    - id
+    - workspaceKey
+    - eventNumber
+    - title
+    - outcome
+    - label
+    - eligibility
+    - modelVersion
+    - createdAt
+  fieldsByRelation:
+    model_owner:
+      - reason
+    auditor:
+      - reason
+    admin:
+      - reason

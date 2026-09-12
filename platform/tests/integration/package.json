@@ -1,0 +1,23 @@
+{
+  "name": "@openfoundry/integration-tests",
+  "version": "0.0.1",
+  "description": "Integration tests against full Docker Compose stack (MVP Section 8)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:verbose": "vitest run --reporter=verbose",
+    "docker:up": "docker compose -f ../../deploy/docker-compose.yaml up -d --wait",
+    "docker:down": "docker compose -f ../../deploy/docker-compose.yaml down -v",
+    "clean": "rm -rf dist coverage"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "vitest": "^3.2.7",
+    "ws": "^8.21.3"
+  }
+}

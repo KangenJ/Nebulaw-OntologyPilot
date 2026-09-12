@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Atlas Loop — 受治理的 Legal World Model 决策与学习演示">
+    <title>Atlas Loop · LWM 控制台</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <strong>ATLAS LOOP</strong>
+            <small>LWM CONTROL ROOM</small>
+          </div>
+        </div>
+
+        <nav class="primary-nav">
+          <button class="nav-item is-active" data-view="queue" type="button">
+            <span class="nav-icon">01</span>
+            <span>待办队列</span>
+            <span class="nav-count" id="queue-nav-count">—</span>
+          </button>
+          <button class="nav-item" data-view="review" type="button">
+            <span class="nav-icon">02</span>
+            <span>审查工作台</span>
+          </button>
+          <button class="nav-item" data-view="learning" type="button">
+            <span class="nav-icon">03</span>
+            <span>学习与审计</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-section">
+          <p class="eyebrow">运行边界</p>
+          <div class="boundary-item"><i class="dot dot-green"></i><span>单租户隔离</span></div>
+          <div class="boundary-item"><i class="dot dot-blue"></i><span>纯合成数据</span></div>
+          <div class="boundary-item"><i class="dot dot-amber"></i><span>人工批准执行</span></div>
+        </div>
+
+        <div class="sidebar-card">
+          <span class="mono-label">ONTOLOGY</span>
+          <strong>lwm.demo@0.1.0</strong>
+          <p>8 类对象 · 7 类关系 · 7 个治理动作</p>
+          <button type="button" class="text-button" data-show-ontology>查看对象图 →</button>
+        </div>
+
+        <div class="sidebar-footer">
+          <span>Powered by</span>
+          <strong>Open Foundry v0.2.3</strong>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="topbar-context">
+            <span class="system-kicker">LEGAL OPERATIONS / SYNTHETIC PILOT</span>
+            <h1 id="page-title">待办队列</h1>
+          </div>
+          <div class="topbar-actions">
+            <div class="live-status" title="演示服务在线">
+              <span class="pulse-dot"></span>
+              <span>DEMO LIVE</span>
+            </div>
+            <button type="button" class="button button-ghost" data-tour>演示脚本</button>
+            <button type="button" class="button button-ghost" data-ingest>新增合成事项</button>
+            <button type="button" class="button button-ghost" data-login>登录 / 切换身份</button>
+            <span id="current-user">未登录</span>
+          </div>
+        </header>
+
+        <section id="view-container" class="view-container" aria-live="polite">
+          <div class="loading-state">
+            <div class="loading-grid" aria-hidden="true"></div>
+            <p>正在加载受治理工作区…</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+
+    <dialog id="login-dialog" class="modal">
+      <form id="login-form">
+        <h2>个人身份认证</h2>
+        <p>输入个人令牌。令牌仅保留在本页面内存，刷新后需重新登录。生产环境使用 OIDC 访问令牌。</p>
+        <label>访问令牌<input name="token" type="password" required autocomplete="off"></label>
+        <button type="submit" class="button button-primary">登录</button>
+        <p id="login-error" role="alert"></p>
+      </form>
+    </dialog>
+
+    <dialog id="review-dialog" class="modal">
+      <form id="review-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">HUMAN-IN-THE-LOOP</span>
+            <h2 id="review-dialog-title">记录人工裁定</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input type="hidden" name="proposalId">
+        <input type="hidden" name="decision">
+        <label>
+          <span>复核人</span>
+          <input name="reviewer" value="林岚" required autocomplete="off">
+        </label>
+        <label id="target-state-field" hidden>
+          <span>修正后的目标状态</span>
+          <input name="targetState" placeholder="例如 MANUAL_REVIEW">
+        </label>
+        <label>
+          <span>裁定说明</span>
+          <textarea name="note" rows="4" minlength="4" required placeholder="写明接受、修正或拒绝的事实与规则依据"></textarea>
+        </label>
+        <div class="modal-note">
+          <span>此操作将同时生成 HumanReview、FeedbackEvent 与审计记录。</span>
+        </div>
+        <div class="modal-actions">
+          <button class="button button-ghost" type="button" data-close-dialog>取消</button>
+          <button class="button button-primary" type="submit">确认并写入反馈</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="task-dialog" class="modal">
+      <form id="task-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">DETERMINISTIC GATE</span>
+            <h2>创建调查任务</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input type="hidden" name="proposalId">
+        <label><span>任务标题</span><input name="title" value="补充关键证据" required></label>
+        <label><span>负责人</span><input name="assignee" value="调查组 A" required></label>
+        <label><span>调查说明</span><textarea name="instructions" rows="3" required>获取缺失材料，记录来源，并由第二人完成核验。</textarea></label>
+        <label><span>截止时间</span><input name="dueAt" type="datetime-local" required></label>
+        <div class="modal-actions">
+          <button class="button button-ghost" type="button" data-close-dialog>取消</button>
+          <button class="button button-primary" type="submit">创建并阻断迁移</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog" class="modal modal-compact">
+      <form id="confirm-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">TWO-STEP CONTROL</span>
+            <h2 id="confirm-title">确认操作</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input type="hidden" name="operation">
+        <p id="confirm-copy" class="confirm-copy"></p>
+        <label><span>批准人</span><input name="approver" value="模型负责人" required></label>
+        <label id="rollback-reason-field" hidden><span>回滚原因</span><textarea name="reason" rows="3">影子流量观察发现校准漂移，恢复上一稳定版本。</textarea></label>
+        <label class="confirm-check"><input type="checkbox" name="confirmed" required><span>我确认这是人工批准动作，并已阅读影响范围。</span></label>
+        <div class="modal-actions">
+          <button class="button button-ghost" type="button" data-close-dialog>取消</button>
+          <button class="button button-danger" type="submit">确认执行</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="tour-dialog" class="modal tour-modal">
+      <div class="modal-header">
+        <div><span class="eyebrow">90 SECOND DEMO</span><h2>建议演示路线</h2></div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+      </div>
+      <ol class="tour-steps">
+        <li><b>查看风险队列</b><span>先说明所有内容都是单租户合成数据。</span></li>
+        <li><b>打开 MAT-2026-037</b><span>展示模型建议被确定性证据门阻断。</span></li>
+        <li><b>完成调查任务</b><span>补齐证据后，门禁重新计算为通过。</span></li>
+        <li><b>人工批准迁移</b><span>状态变化、反馈和审计同时产生。</span></li>
+        <li><b>进入学习与审计</b><span>展示候选模型只能在离线门全部通过后人工晋级，并可回滚。</span></li>
+      </ol>
+      <button class="button button-primary button-block" type="button" data-start-tour>从高风险事项开始</button>
+    </dialog>
+  </body>
+</html>

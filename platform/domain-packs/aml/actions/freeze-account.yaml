@@ -1,0 +1,40 @@
+# actions/freeze-account.yaml
+action: FreezeAccount
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "account.status == 'ACTIVE'"
+    error: "Only active accounts can be frozen"
+  - expr: "actor.hasRole('compliance_officer') || actor.hasRole('bsa_officer')"
+    error: "Only compliance officers or BSA officers can freeze accounts"
+
+effects:
+  - type: updateObject
+    target: "account"
+    set:
+      status: "FROZEN"
+
+sideEffects:
+  - name: emitAccountFrozenEvent
+    type: event
+    config:
+      type: "aml.account.frozen"
+      data:
+        accountId: "account.id"
+        customer: "account.customer"
+        reason: "params.reason"
+
+  - name: notifyCorebanking
+    type: webhook
+    config:
+      url: "${COREBANKING_WEBHOOK_URL}"
+      method: POST
+      body:
+        accountNumber: "account.accountNumber"
+        action: "FREEZE"
+        reason: "params.reason"
+    retries: 3
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

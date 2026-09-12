@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Go binaries
+packages/cel-evaluator/cel-evaluator
+packages/cel-evaluator/cel-evaluator.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test / Coverage
+coverage/
+.nyc_output/
+
+# Turborepo
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated SDK output
+packages/sdk-typescript/generated/
+
+# Generated spec output (rebuilt via spec:all)
+packages/api/spec/
+
+# Docker volumes (local dev)
+deploy/docker-volumes/
+
+# Lock files from non-pnpm managers
+package-lock.json
+yarn.lock
+
+# Misc
+*.tgz
+*.tar.gz
+.cardinal/
+.avril/
+# Local agent guidance (not part of the published project)
+AGENTS.md
+var/lwm/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

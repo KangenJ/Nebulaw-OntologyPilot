@@ -1,0 +1,30 @@
+action: HoldModel
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "candidate.stage == 'CANDIDATE'"
+    error: "Only candidate models can be held"
+  - expr: "actor.hasRole('model_owner') || actor.hasRole('admin')"
+    error: "Only model owners or admins can hold models"
+
+effects:
+  - type: updateObject
+    target: "candidate"
+    set:
+      stage: "HELD"
+      approvedBy: "params.approver"
+
+sideEffects:
+  - name: emitModelHeld
+    type: event
+    config:
+      type: "lwm.demo.model.held"
+      data:
+        modelVersion: "candidate.versionLabel"
+        reason: "params.reason"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

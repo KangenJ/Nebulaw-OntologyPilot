@@ -1,0 +1,1251 @@
+/**
+ * Action execution pipeline (Section 5.3).
+ *
+ * Pipeline order:
+ *   Validate -> Authorise -> Consent -> Preconditions -> Execute -> Side-effects -> Audit -> Emit
+ *
+ * Effects execute in manifest order within a single SPI transaction.
+ * CEL expressions are evaluated against a context captured before the first
+ * effect. Created objects are injected back into this context so subsequent
+ * effects can reference them (e.g. createObject → createLink).
+ * If any effect fails, the transaction is rolled back.
+ */
+
+import type {
+  OntologyObject,
+  OntologyLink,
+  Transaction,
+  RequestContext,
+  DateTime,
+  DataPurpose,
+} from '@openfoundry/spi';
+import type { ParsedSchema, ActionType } from '@openfoundry/odl';
+import { createLogger } from '@openfoundry/observability';
+import { randomUUID } from 'node:crypto';
+import { assertNativeActionParameters, validateEffectProperties } from './strict-validation.js';
+import type {
+  ActionManifest,
+  ActionEffect,
+  UpdateObjectEffect,
+  CreateLinkEffect,
+  DeleteLinkEffect,
+  CreateObjectEffect,
+  RecordConsentEffect,
+} from '../parser/types.js';
+import type {
+  ActionActor,
+  ActionContext,
+  ActionResult,
+  ActionError,
+  AffectedObject,
+  ActionExecutorConfig,
+} from './types.js';
+
+const logger = createLogger('action-executor');
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function generateActionId(): string {
+  return `act_${randomUUID()}`;
+}
+
+function now(): DateTime {
+  return new Date().toISOString() as DateTime;
+}
+
+function failResult(actionId: string, errors: ActionError[]): ActionResult {
+  return { success: false, actionId, errors, affectedObjects: [] };
+}
+
+/**
+ * Add an `id` alias for `_id` on an OntologyObject so CEL expressions can
+ * reference `object.id` (the ODL @primary name) as well as `object._id`.
+ */
+function addIdAlias(obj: OntologyObject): OntologyObject {
+  if (!('id' in obj)) {
+    (obj as Record<string, unknown>)['id'] = obj._id;
+  }
+  return obj;
+}
+
+/** System field prefixes that storage manages internally. */
+const SYSTEM_FIELD_PREFIXES = new Set([
+  '_id', '_tenantId', '_version', '_createdAt', '_updatedAt', '_deletedAt',
+  '_type', '_fromId', '_toId', '_fromType', '_toType',
+]);
+
+/**
+ * Strip system fields from an object snapshot before using it in compensation.
+ * Storage providers manage these fields internally; including them in an
+ * updateObject() call can cause column-mapping errors.
+ */
+function stripSystemFields(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (!SYSTEM_FIELD_PREFIXES.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// ActionExecutor
+// ---------------------------------------------------------------------------
+
+export class ActionExecutor {
+  private readonly config: ActionExecutorConfig;
+
+  constructor(config: ActionExecutorConfig) {
+    this.config = config;
+  }
+
+  /**
+   * Execute an action against the storage provider.
+   *
+   * @param manifest  - Parsed action manifest
+   * @param params    - Action parameters (param name -> value or object ID)
+   * @param actor     - The actor executing the action
+   * @param ctx       - Execution context (tenant, consent, etc.)
+   * @param schema    - Parsed ODL schema for param resolution
+   */
+  async execute(
+    manifest: ActionManifest,
+    params: Record<string, unknown>,
+    actor: ActionActor,
+    ctx: ActionContext,
+    schema: ParsedSchema,
+  ): Promise<ActionResult> {
+    return this.executeInternal(manifest,params,actor,ctx,schema);
+  }
+
+  /** Trusted server composition only. success means STAGED, never committed.
+   * The owner commits the shared transaction after all participants succeed.
+   * A failed stage rolls it back, including earlier participants. No post-commit I/O is allowed.
+   */
+  async stage(
+    manifest:ActionManifest,params:Record<string,unknown>,actor:ActionActor,
+    ctx:ActionContext,schema:ParsedSchema,transaction:Transaction,
+  ):Promise<ActionResult>{
+    try{
+      if(!this.config.strictEffects||!this.config.requireConsistentReadSet||!this.config.transactionalJournal
+        ||ctx.expectedReadRevision===undefined||!transaction.assertReadRevision||!transaction.assertContext
+        ||this.config.consentManager||this.config.sideEffectHandler||this.config.auditWriter
+        ||this.config.eventPublisher||this.config.relationshipWriter){
+        await transaction.rollback();return failResult(generateActionId(),[{code:'UNSAFE_STAGED_EXECUTION',message:'Staging requires strict effects, a fixed read epoch, transactional journal and no external side-effect services'}]);
+      }
+      await transaction.assertContext(ctx.requestContext);
+      const result=await this.executeInternal(manifest,params,actor,ctx,schema,transaction);
+      if(!result.success)await transaction.rollback();return result;
+    }catch(error){await transaction.rollback();throw error;}
+  }
+
+  private async executeInternal(
+    manifest:ActionManifest,params:Record<string,unknown>,actor:ActionActor,
+    ctx:ActionContext,schema:ParsedSchema,sharedTransaction?:Transaction,
+  ):Promise<ActionResult>{
+    const actionId = generateActionId();
+    const actionType = manifest.action;
+    const reqCtx = ctx.requestContext;
+    let readRevision: string | undefined;
+    if (this.config.requireConsistentReadSet) {
+      if (!this.config.storage.getReadRevision) return failResult(actionId, [{code:'READ_SET_GUARD_REQUIRED',message:'Storage cannot guard the full precondition read set'}]);
+      readRevision = await this.config.storage.getReadRevision(reqCtx);
+      if(ctx.expectedReadRevision!==undefined&&ctx.expectedReadRevision!==readRevision)return failResult(actionId,[{code:'READ_SET_CONFLICT',message:'Adapter input snapshot is no longer current'}]);
+    }
+
+    // Find the action type definition in the schema
+    const actionTypeDef = schema.actionTypes.find(
+      (at) => at.name === actionType,
+    );
+
+    if (this.config.strictEffects || this.config.transactionalJournal) {
+      if (!actionTypeDef || (manifest.sideEffects?.length ?? 0) > 0 || manifest.effects.some(e => e.type === 'recordConsent')) {
+        return failResult(actionId, [{ code: 'UNSAFE_ACTION_MANIFEST', message: 'A native definition and transaction-only effects are required' }]);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Step 1: VALIDATE — schema validation of params
+    // ------------------------------------------------------------------
+    const validationErrors = this.validateParams(actionTypeDef, params, schema);
+    if (validationErrors.length > 0) {
+      return failResult(actionId, validationErrors);
+    }
+
+    // ------------------------------------------------------------------
+    // Step 2: AUTHORISE — call SecurityLayer.checkPermission
+    // ------------------------------------------------------------------
+    const permResult = await this.config.security.checkPermission(
+      actor,
+      actionType,
+      params,
+      reqCtx,
+    );
+    if (!permResult.allowed) {
+      const reason = permResult.reason ?? `Actor ${actor.id} is not authorized to execute ${actionType}`;
+      await this.auditDenied(actionId, actor, actionType, reqCtx, reason);
+      return failResult(actionId, [
+        {
+          code: 'AUTHORIZATION_DENIED',
+          message: reason,
+        },
+      ]);
+    }
+
+    // ------------------------------------------------------------------
+    // Step 3: CONSENT — call ConsentManager.checkConsent (if active)
+    // ------------------------------------------------------------------
+    if (this.config.consentManager && ctx.consentPurpose && ctx.consentSubjectId) {
+      const consentDecision = await this.config.consentManager.checkConsent(
+        ctx.consentSubjectId,
+        ctx.consentPurpose,
+        actor.id,
+        reqCtx.tenantId,
+      );
+      if (!consentDecision.allowed) {
+        const reason = `Consent denied for purpose ${ctx.consentPurpose}`;
+        await this.auditDenied(actionId, actor, actionType, reqCtx, reason, {
+          consentDenied: true,
+          subjectId: ctx.consentSubjectId,
+        });
+        return failResult(actionId, [
+          {
+            code: 'CONSENT_DENIED',
+            message: reason,
+          },
+        ]);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Step 4: PRECONDITIONS — resolve @param objects, evaluate CEL
+    // ------------------------------------------------------------------
+    // Resolve object params from SPI before CEL evaluation
+    const resolvedVariables = await this.resolveParamObjects(
+      actionTypeDef,
+      params,
+      schema,
+      reqCtx,
+    );
+
+    // Add standard variables
+    resolvedVariables['actor'] = { id: actor.id, roles: actor.roles, type: actor.type };
+    resolvedVariables['now'] = now();
+    resolvedVariables['params'] = params;
+
+    // Pre-resolve @link field paths referenced by the manifest.
+    // This populates link targets in the resolved objects so that
+    // preconditions, effects, and side-effects can traverse them
+    // (e.g. "patient.currentWard", "patient.currentBed").
+    await this.preResolveLinkPaths(manifest, resolvedVariables, schema, reqCtx);
+
+    for (const precondition of manifest.preconditions) {
+      let result;
+      try {
+        result = await this.config.cel.evaluate(precondition.expr, resolvedVariables);
+      } catch (error) {
+        return failResult(actionId, [{ code: 'PRECONDITION_EVAL_ERROR', message: `CEL unavailable: ${error instanceof Error ? error.message : String(error)}` }]);
+      }
+      if (result.error) {
+        return failResult(actionId, [
+          {
+            code: 'PRECONDITION_EVAL_ERROR',
+            message: `Failed to evaluate precondition: ${result.error}`,
+          },
+        ]);
+      }
+      if (result.value !== true) {
+        return failResult(actionId, [
+          {
+            code: 'PRECONDITION_FAILED',
+            message: precondition.error,
+          },
+        ]);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Step 5: EXECUTE — apply effects in manifest order, single txn
+    // ------------------------------------------------------------------
+    // Capture effect context from resolved variables (spec Section 5.3).
+    // Created objects are injected back into this context so subsequent
+    // effects (e.g. createLink) can reference them by camelCase type name.
+    const effectContext: Record<string, unknown> = { ...resolvedVariables };
+    const affectedObjects: AffectedObject[] = [];
+    const beforeStates: Map<string, Record<string, unknown>> = new Map();
+    const afterStates: Map<string, Record<string, unknown>> = new Map();
+
+    const txn = sharedTransaction ?? await this.config.storage.beginTransaction(reqCtx);
+
+    try {
+      if (this.config.requireConsistentReadSet) {
+        if (!txn.assertReadRevision || readRevision === undefined) throw new Error('READ_SET_GUARD_REQUIRED');
+        await txn.assertReadRevision(readRevision);
+      }
+      if (txn.assertObjectVersion) {
+        const seen = new Set<unknown>();
+        const check = async (value: unknown): Promise<void> => {
+          if (!value || typeof value !== 'object' || seen.has(value)) return;
+          seen.add(value);
+          const object = value as OntologyObject;
+          if (object._id && object._type && typeof object._version === 'number') {
+            await txn.assertObjectVersion!(object._type, object._id, object._version);
+          }
+          for (const child of Object.values(value)) await check(child);
+        };
+        await check(resolvedVariables);
+      }
+      for (const effect of manifest.effects) {
+        await this.executeEffect(
+          effect,
+          effectContext,
+          txn,
+          reqCtx,
+          schema,
+          affectedObjects,
+          beforeStates,
+          afterStates,
+        );
+      }
+      if (this.config.transactionalJournal) {
+        await this.config.transactionalJournal.stage(txn, {
+          version: 'native-action-commit-v1', tenantId: reqCtx.tenantId, actionId,
+          audit: {
+            id: `audit_${actionId}`, tenantId: reqCtx.tenantId, timestamp: now(), traceId: reqCtx.traceId ?? actionId,
+            actor: { type: actor.type, id: actor.id, roles: [...actor.roles], ...(actor.ip ? { ip: actor.ip } : {}) },
+            operation: { type: 'action', actionType, actionId },
+            detail: { before: structuredClone(Object.fromEntries(beforeStates)), after: structuredClone(Object.fromEntries(afterStates)), result: 'success' },
+          },
+          affectedObjects: structuredClone(affectedObjects),
+        });
+      }
+      if(this.config.strictEffects){
+        const finalPermission=await this.config.security.checkPermission(actor,actionType,params,reqCtx);
+        if(!finalPermission.allowed)throw new Error('AUTHORIZATION_REVOKED');
+      }
+      if(!sharedTransaction)await txn.commit();
+    } catch (err) {
+      await txn.rollback();
+      return failResult(actionId, [
+        {
+          // A typed storage CAS/read-epoch conflict is a confirmed rollback,
+          // not an unknown effect failure. Preserve it for native adapters;
+          // never infer retryability from arbitrary exception text.
+          code: this.config.requireConsistentReadSet && (err as { code?: unknown })?.code === 'CONFLICT'
+            ? 'READ_SET_CONFLICT' : 'EFFECT_EXECUTION_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        },
+      ]);
+    }
+
+    if(sharedTransaction)return {success:true,actionId,errors:[],affectedObjects};
+
+    // ------------------------------------------------------------------
+    // Step 6: SIDE-EFFECTS — execute inline with retry
+    // ------------------------------------------------------------------
+    if (this.config.sideEffectHandler && manifest.sideEffects.length > 0) {
+      for (const se of manifest.sideEffects) {
+        // Interpolate event `data` values against the action context so
+        // payloads carry resolved IDs/values (e.g. "bed.id" → the bed's id),
+        // not the literal expression strings. Link paths (e.g. "bed.ward.id")
+        // were pre-resolved into the context by preResolveLinkPaths.
+        const seConfig = this.resolveSideEffectConfig(se.type, se.config, effectContext);
+        const seResult = await this.config.sideEffectHandler.execute(
+          se.name,
+          se.type,
+          seConfig,
+          effectContext,
+          se.retries,
+        );
+
+        if (!seResult.success) {
+          const policy = manifest.rollback?.onSideEffectFailure ?? 'LOG_AND_CONTINUE';
+          if (policy === 'ROLLBACK_ALL') {
+            // CQ-24: Attempt compensating transaction to undo committed effects.
+            // Reverses both object and link effects using beforeStates snapshots.
+            try {
+              const compensatingTxn = await this.config.storage.beginTransaction(reqCtx);
+              try {
+                for (const affected of affectedObjects) {
+                  // Discriminate links from objects via the schema, not the
+                  // beforeStates key: a `link:<type>:<id>` snapshot is only
+                  // written for DELETED links (executeDeleteLink), so keying on
+                  // it would mis-route a CREATED link's compensation through the
+                  // object branch (deleteObject) instead of deleteLink.
+                  const isLink = schema.linkTypes.some((lt) => lt.name === affected.type);
+
+                  if (isLink) {
+                    if (affected.changeType === 'created') {
+                      // Undo link creation by deleting the link
+                      await compensatingTxn.deleteLink(affected.type, affected.id);
+                    } else if (affected.changeType === 'deleted') {
+                      // Undo link deletion by recreating from beforeStates snapshot
+                      const before = beforeStates.get(`link:${affected.type}:${affected.id}`);
+                      if (before && before['_fromId'] && before['_toId']) {
+                        const { _fromId, _toId, _type, _id, _tenantId, _version, _createdAt, _updatedAt, _deletedAt, _fromType, _toType, ...props } = before;
+                        await compensatingTxn.createLink(
+                          affected.type,
+                          _fromId as string,
+                          _toId as string,
+                          props,
+                        );
+                      }
+                    }
+                  } else {
+                    const before = beforeStates.get(`${affected.type}:${affected.id}`);
+                    if (affected.changeType === 'created') {
+                      // Undo object create by soft-deleting
+                      await compensatingTxn.deleteObject(affected.type, affected.id, 'soft');
+                    } else if (affected.changeType === 'updated' && before) {
+                      // Undo object update by restoring prior state.
+                      // Strip system fields — storage manages these internally
+                      // and they would cause column-mapping errors in Postgres.
+                      const userProps = stripSystemFields(before);
+                      await compensatingTxn.updateObject(affected.type, affected.id, userProps);
+                    }
+                    // 'deleted' object rollbacks are best-effort; recreating deleted objects
+                    // requires the full prior state which may not always be available
+                  }
+                }
+                await compensatingTxn.commit();
+              } catch (innerErr) {
+                logger.error({ err: innerErr, actionId }, 'Compensating transaction rollback failed');
+                await compensatingTxn.rollback();
+              }
+            } catch (outerErr) {
+              logger.error({ err: outerErr, actionId }, 'Failed to begin compensating transaction');
+            }
+            return failResult(actionId, [
+              {
+                code: 'SIDE_EFFECT_FAILURE',
+                message: `Side-effect "${se.name}" failed: ${seResult.error ?? 'unknown error'}. Compensating transaction attempted.`,
+              },
+            ]);
+          }
+          // LOG_AND_CONTINUE / RETRY_INDEFINITELY: continue execution
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Step 7: AUDIT — write AuditRecord with before/after, actor, traceId
+    // Step 8: EMIT — publish CloudEvents for affected objects/links
+    // ------------------------------------------------------------------
+    // These run AFTER the transaction has committed. Failures here must not
+    // cause the action to appear failed — the data is already persisted.
+    try {
+      if (this.config.auditWriter && !this.config.transactionalJournal) {
+        await this.config.auditWriter.write({
+          id: `audit_${actionId}`,
+          tenantId: reqCtx.tenantId,
+          timestamp: now(),
+          traceId: reqCtx.traceId ?? actionId,
+          actor: {
+            type: actor.type,
+            id: actor.id,
+            roles: actor.roles,
+            ip: actor.ip,
+          },
+          operation: {
+            type: 'action',
+            actionType,
+            actionId,
+          },
+          detail: {
+            before: Object.fromEntries(beforeStates),
+            after: Object.fromEntries(afterStates),
+            result: 'success',
+          },
+        });
+      }
+
+      if (this.config.eventPublisher && !this.config.transactionalJournal) {
+        const cause = { actionType, actionId, actor: actor.id };
+        for (const affected of affectedObjects) {
+          const linkKey = `link:${affected.type}:${affected.id}`;
+          const isLink = beforeStates.has(linkKey) || afterStates.has(linkKey);
+
+          if (isLink) {
+            // Use publishLinkChange for link effects with fromId/toId
+            const linkState = (afterStates.get(linkKey) ?? beforeStates.get(linkKey)) as Record<string, unknown> | undefined;
+            const fromId = (linkState?.['_fromId'] as string) ?? '';
+            const toId = (linkState?.['_toId'] as string) ?? '';
+            await this.config.eventPublisher.publishLinkChange(
+              affected.changeType as 'created' | 'deleted',
+              affected.type,
+              affected.id,
+              fromId,
+              toId,
+              cause,
+              reqCtx,
+            );
+            // Mint/remove the graph-derived ReBAC tuple for this link, so
+            // `... from <link>` rules resolve without out-of-band provisioning.
+            await this.syncLinkTuple(affected.type, affected.changeType, fromId, toId);
+          } else {
+            // Use publishObjectChange for object effects
+            await this.config.eventPublisher.publishObjectChange(
+              affected.changeType,
+              affected.type,
+              affected.id,
+              beforeStates.get(`${affected.type}:${affected.id}`) as Record<string, unknown> | undefined,
+              afterStates.get(`${affected.type}:${affected.id}`) as Record<string, unknown> | undefined,
+              cause,
+              reqCtx,
+            );
+          }
+        }
+      }
+    } catch (postCommitErr) {
+      logger.error({ err: postCommitErr, actionId }, 'Post-commit audit/event publishing failed');
+      // Do not return failure — the transaction already committed successfully.
+    }
+
+    return {
+      success: true,
+      actionId,
+      errors: [],
+      affectedObjects,
+    };
+  }
+
+  // ─── Step 1: Param validation ───
+
+  private validateParams(
+    actionTypeDef: ActionType | undefined,
+    params: Record<string, unknown>,
+    schema: ParsedSchema,
+  ): ActionError[] {
+    if (!actionTypeDef) {
+      // If no schema definition, skip validation (structural-only mode)
+      return [];
+    }
+
+    const errors: ActionError[] = [];
+    if (this.config.strictEffects) {
+      try {
+        assertNativeActionParameters(actionTypeDef,params,schema);
+      } catch (error) {
+        return [{ code: 'INVALID_PARAM', message: error instanceof Error ? error.message : 'Invalid parameter' }];
+      }
+    }
+    for (const field of actionTypeDef.fields) {
+      const isParam = field.directives.some((d) => d.kind === 'param');
+      if (!isParam) continue;
+
+      if (field.type.nonNull && (params[field.name] === undefined || params[field.name] === null)) {
+        errors.push({
+          code: 'MISSING_REQUIRED_PARAM',
+          message: `Required parameter "${field.name}" is missing`,
+          path: `params.${field.name}`,
+        });
+      }
+      // Never accept caller-supplied object snapshots as authoritative CEL
+      // inputs. Object parameters must be tenant-scoped IDs resolved by SPI.
+      const value = params[field.name];
+      if (value != null && schema.objectTypes.some(ot => ot.name === field.type.name)
+        && (typeof value !== 'string' || value.trim().length === 0)) {
+        errors.push({ code: 'INVALID_OBJECT_PARAM', message: `Parameter "${field.name}" must be an object ID`, path: `params.${field.name}` });
+      }
+    }
+    return errors;
+  }
+
+  // ─── Step 4: Resolve param objects from SPI ───
+
+  private async resolveParamObjects(
+    actionTypeDef: ActionType | undefined,
+    params: Record<string, unknown>,
+    schema: ParsedSchema,
+    reqCtx: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const resolved: Record<string, unknown> = {};
+
+    if (!actionTypeDef) {
+      // No schema; pass params through as-is
+      Object.assign(resolved, params);
+      return resolved;
+    }
+
+    for (const field of actionTypeDef.fields) {
+      const isParam = field.directives.some((d) => d.kind === 'param');
+      if (!isParam) continue;
+
+      const paramValue = params[field.name];
+      if (paramValue === undefined || paramValue === null) {
+        resolved[field.name] = null;
+        continue;
+      }
+
+      // Check if this param type is an object type in the schema
+      const isObjectType = schema.objectTypes.some(
+        (ot) => ot.name === field.type.name,
+      );
+
+      if (isObjectType && typeof paramValue === 'string') {
+        // Resolve the object from storage by ID
+        const obj = await this.config.storage.getObject(
+          reqCtx,
+          field.type.name,
+          paramValue,
+        );
+        resolved[field.name] = obj ? addIdAlias(obj) : null;
+      } else {
+        // Scalar param — pass through
+        resolved[field.name] = paramValue;
+      }
+    }
+
+    return resolved;
+  }
+
+  // ─── Step 4b: Pre-resolve link paths ───
+
+  /**
+   * Scan the manifest for dotted paths that traverse @link fields and
+   * eagerly resolve them into the context. This allows sync resolveExpression
+   * and precondition CEL evaluation to access linked objects without
+   * needing async resolution at each call site.
+   *
+   * For example, "patient.currentBed" in a transfer-ward manifest triggers:
+   *   1. Find Patient type in schema
+   *   2. Find "currentBed" field with @link(type: "OccupiesBed", direction: OUTBOUND)
+   *   3. Query getLinks(patientId, "OccupiesBed", "outbound")
+   *   4. Fetch the target Bed object
+   *   5. Cache it as patient.currentBed in the context
+   */
+  private async preResolveLinkPaths(
+    manifest: ActionManifest,
+    context: Record<string, unknown>,
+    schema: ParsedSchema,
+    reqCtx: RequestContext,
+  ): Promise<void> {
+    // Collect all dotted paths from the manifest
+    const paths = new Set<string>();
+
+    for (const pre of manifest.preconditions) {
+      // Extract variable references from CEL: simple heuristic for dot paths
+      for (const match of pre.expr.matchAll(/([a-zA-Z_]\w*(?:\.\w+)+)/g)) {
+        paths.add(match[1]!);
+      }
+    }
+
+    for (const effect of manifest.effects) {
+      if (effect.type === 'updateObject' && effect.target.includes('.')) {
+        paths.add(effect.target);
+      }
+      if (effect.type === 'updateObject') {
+        for (const expr of Object.values(effect.set)) {
+          if (typeof expr === 'string' && expr.includes('.') && !expr.startsWith("'")) {
+            paths.add(expr);
+          }
+        }
+      }
+      if (effect.type === 'createObject') {
+        for (const expr of Object.values(effect.properties)) {
+          if (typeof expr === 'string' && expr.includes('.') && !expr.startsWith("'")) {
+            paths.add(expr);
+          }
+        }
+      }
+      if (effect.type === 'createLink' && effect.properties) {
+        for (const expr of Object.values(effect.properties)) {
+          if (typeof expr === 'string' && expr.includes('.') && !expr.startsWith("'")) {
+            paths.add(expr);
+          }
+        }
+      }
+    }
+
+    // Side-effect event `data` values may reference link paths (e.g.
+    // "bed.ward.id"); scan them so the link prefix is pre-resolved and the
+    // interpolation at emit time can read it from context.
+    for (const se of manifest.sideEffects ?? []) {
+      const cfg = se.config as Record<string, unknown> | undefined;
+      const data = cfg?.['data'];
+      if (data && typeof data === 'object') {
+        for (const expr of Object.values(data as Record<string, unknown>)) {
+          if (typeof expr === 'string' && expr.includes('.') && !expr.startsWith("'")) {
+            paths.add(expr);
+          }
+        }
+      }
+    }
+
+    // For each unique dotted path, resolve it via resolveTarget (which handles
+    // link traversal and caches results in context).
+    const resolved = new Set<string>();
+    for (const path of paths) {
+      // Extract the link path prefix (e.g. "patient.currentWard" from "patient.currentWard.name")
+      const segments = path.split('.');
+      // Try progressively longer prefixes to resolve nested links
+      for (let i = 2; i <= segments.length; i++) {
+        const prefix = segments.slice(0, i).join('.');
+        if (resolved.has(prefix)) continue;
+        await this.resolveTarget(prefix, context, schema, reqCtx);
+        resolved.add(prefix);
+      }
+    }
+  }
+
+  // ─── Step 5: Effect execution ───
+
+  private async executeEffect(
+    effect: ActionEffect,
+    context: Record<string, unknown>,
+    txn: Transaction,
+    reqCtx: RequestContext,
+    schema: ParsedSchema,
+    affectedObjects: AffectedObject[],
+    beforeStates: Map<string, Record<string, unknown>>,
+    afterStates: Map<string, Record<string, unknown>>,
+  ): Promise<void> {
+    switch (effect.type) {
+      case 'updateObject':
+        await this.executeUpdateObject(effect, context, txn, reqCtx, affectedObjects, beforeStates, afterStates, schema);
+        break;
+      case 'createLink':
+        await this.executeCreateLink(effect, context, txn, reqCtx, schema, affectedObjects, afterStates);
+        break;
+      case 'deleteLink':
+        await this.executeDeleteLink(effect, context, txn, reqCtx, affectedObjects, beforeStates, schema);
+        break;
+      case 'createObject':
+        await this.executeCreateObject(effect, context, txn, affectedObjects, afterStates, schema);
+        break;
+      case 'recordConsent':
+        await this.executeRecordConsent(effect, context, reqCtx);
+        break;
+    }
+  }
+
+  /**
+   * Record a consent decision via the ConsentManager. Resolves `subject` from
+   * context (e.g. a just-created patient), honours an optional CEL `condition`
+   * (opt-out), and defaults purpose=DIRECT_CARE, decision=GRANT. No-op if no
+   * consent manager is wired. NOTE: consent is recorded outside the SPI
+   * transaction, so this should be the terminal effect (it is not rolled back).
+   */
+  private async executeRecordConsent(
+    effect: RecordConsentEffect,
+    context: Record<string, unknown>,
+    reqCtx: RequestContext,
+  ): Promise<void> {
+    if (!this.config.consentManager) return;
+    if (effect.condition) {
+      const cond = await this.config.cel.evaluate(effect.condition, context);
+      if (cond.value !== true) return;
+    }
+    const subjectId = String(this.resolveExpression(effect.subject, context) ?? '');
+    if (!subjectId) {
+      throw new Error(`recordConsent: subject "${effect.subject}" did not resolve to an id`);
+    }
+    const purpose = (effect.purpose ?? 'DIRECT_CARE') as DataPurpose;
+    const decision = (effect.decision ?? 'GRANT') === 'DENY' ? 'DENY' : 'GRANT';
+    await this.config.consentManager.recordConsent(
+      subjectId,
+      purpose,
+      decision,
+      effect.evidence,
+      reqCtx.tenantId,
+    );
+  }
+
+  private async executeUpdateObject(
+    effect: UpdateObjectEffect,
+    context: Record<string, unknown>,
+    txn: Transaction,
+    reqCtx: RequestContext,
+    affectedObjects: AffectedObject[],
+    beforeStates: Map<string, Record<string, unknown>>,
+    afterStates: Map<string, Record<string, unknown>>,
+    schema?: ParsedSchema,
+  ): Promise<void> {
+    // Evaluate condition if present
+    if (effect.condition) {
+      const condResult = await this.config.cel.evaluate(effect.condition, context);
+      if (this.config.strictEffects && (condResult.error || typeof condResult.value !== 'boolean')) throw new Error('STRICT_EFFECT: condition evaluation failed');
+      if (condResult.value !== true) return;
+    }
+
+    // Resolve target to an object (supports dotted paths like "patient.currentBed")
+    const target = await this.resolveTarget(effect.target, context, schema, reqCtx);
+    if (!target) {
+      throw new Error(`Target "${effect.target}" not found in context`);
+    }
+
+    // Resolve property values from CEL context
+    let properties: Record<string, unknown> = Object.create(null);
+    for (const [key, expr] of Object.entries(effect.set)) {
+      properties[key] = this.resolveExpression(expr, context);
+    }
+
+    if (this.config.strictEffects) {
+      const definition = schema?.objectTypes.find(t => t.name === target._type);
+      if (!definition || target._tenantId !== reqCtx.tenantId || target._deletedAt) throw new Error('STRICT_EFFECT: invalid target scope');
+      const current = afterStates.get(`${target._type}:${target._id}`) ?? target;
+      properties = await validateEffectProperties(definition, properties, current, schema!, this.config.cel);
+    }
+
+    // Capture before state
+    const beforeKey = `${target._type}:${target._id}`;
+    if (!beforeStates.has(beforeKey)) {
+      beforeStates.set(beforeKey, { ...target });
+    }
+
+    // Preserve the version observed during rule evaluation. A concurrent writer
+    // must not turn an approved precondition into an unconditional stale write.
+    const updated = await txn.updateObject(target._type, target._id, properties, target._version);
+    target._version = updated._version;
+
+    afterStates.set(beforeKey, { ...updated });
+    affectedObjects.push({
+      type: target._type,
+      id: target._id,
+      changeType: 'updated',
+    });
+  }
+
+  private async executeCreateLink(
+    effect: CreateLinkEffect,
+    context: Record<string, unknown>,
+    txn: Transaction,
+    reqCtx: RequestContext,
+    schema: ParsedSchema,
+    affectedObjects: AffectedObject[],
+    afterStates: Map<string, Record<string, unknown>>,
+  ): Promise<void> {
+    // Evaluate condition if present
+    if (effect.condition) {
+      const condResult = await this.config.cel.evaluate(effect.condition, context);
+      if (this.config.strictEffects && (condResult.error || typeof condResult.value !== 'boolean')) throw new Error('STRICT_EFFECT: condition evaluation failed');
+      if (condResult.value !== true) return;
+    }
+
+    const fromObj = await this.resolveTarget(effect.from, context, schema, reqCtx);
+    const toObj = await this.resolveTarget(effect.to, context, schema, reqCtx);
+    if (!fromObj) throw new Error(`createLink "from" param "${effect.from}" not found in context`);
+    if (!toObj) throw new Error(`createLink "to" param "${effect.to}" not found in context`);
+
+    // Resolve link properties
+    let properties: Record<string, unknown> = Object.create(null);
+    if (effect.properties) {
+      for (const [key, expr] of Object.entries(effect.properties)) {
+        properties[key] = this.resolveExpression(expr, context);
+      }
+    }
+
+    if (this.config.strictEffects) {
+      const definition = schema.linkTypes.find(t => t.name === effect.linkType);
+      if (!definition || fromObj._type !== definition.from || toObj._type !== definition.to
+        || fromObj._tenantId !== reqCtx.tenantId || toObj._tenantId !== reqCtx.tenantId
+        || fromObj._deletedAt || toObj._deletedAt) throw new Error('STRICT_EFFECT: invalid link endpoints');
+      properties = await validateEffectProperties(definition, properties, undefined, schema, this.config.cel);
+    }
+    const link = await txn.createLink(effect.linkType, fromObj._id, toObj._id, properties);
+
+    const linkKey = `link:${effect.linkType}:${link._id}`;
+    afterStates.set(linkKey, { ...link });
+    affectedObjects.push({
+      type: effect.linkType,
+      id: link._id,
+      changeType: 'created',
+    });
+  }
+
+  private async executeDeleteLink(
+    effect: DeleteLinkEffect,
+    context: Record<string, unknown>,
+    txn: Transaction,
+    reqCtx: RequestContext,
+    affectedObjects: AffectedObject[],
+    beforeStates: Map<string, Record<string, unknown>>,
+    schema?: ParsedSchema,
+  ): Promise<void> {
+    // Resolve filter to concrete link IDs (Section 5.3 deleteLink resolution)
+    const matchingLinks = await this.resolveDeleteLinkFilter(
+      effect,
+      context,
+      reqCtx,
+      schema,
+    );
+
+    const expect = effect.expect ?? 'ONE';
+
+    if (expect === 'ONE') {
+      if (matchingLinks.length !== 1) {
+        throw new Error(
+          `deleteLink ${effect.linkType}: expected exactly ONE matching link, found ${matchingLinks.length}`,
+        );
+      }
+    }
+    // expect === 'ALL': delete all matches (0 is valid for ALL)
+
+    for (const link of matchingLinks) {
+      if (this.config.strictEffects && (link._tenantId !== reqCtx.tenantId || link._type !== effect.linkType)) throw new Error('STRICT_EFFECT: invalid link scope');
+      const linkKey = `link:${effect.linkType}:${link._id}`;
+      beforeStates.set(linkKey, { ...link });
+
+      await txn.deleteLink(effect.linkType, link._id);
+
+      affectedObjects.push({
+        type: effect.linkType,
+        id: link._id,
+        changeType: 'deleted',
+      });
+    }
+  }
+
+  private async executeCreateObject(
+    effect: CreateObjectEffect,
+    context: Record<string, unknown>,
+    txn: Transaction,
+    affectedObjects: AffectedObject[],
+    afterStates: Map<string, Record<string, unknown>>,
+    schema: ParsedSchema,
+  ): Promise<void> {
+    // Resolve property values
+    let properties: Record<string, unknown> = Object.create(null);
+    for (const [key, expr] of Object.entries(effect.properties)) {
+      properties[key] = this.resolveExpression(expr, context);
+    }
+
+    if (this.config.strictEffects) {
+      const definition = schema.objectTypes.find(t => t.name === effect.objectType);
+      if (!definition) throw new Error('STRICT_EFFECT: unknown object type');
+      properties = await validateEffectProperties(definition, properties, undefined, schema, this.config.cel);
+    }
+    const created = await txn.createObject(effect.objectType, properties);
+
+    // Inject created object into context so subsequent effects (e.g. createLink)
+    // can reference it. Key is the camelCase form of the objectType name:
+    //   "CorpusEntry" → "corpusEntry", "Instance" → "instance"
+    const contextKey = effect.as ?? (effect.objectType[0]!.toLowerCase() + effect.objectType.slice(1));
+    if (effect.as && (!/^[a-z][A-Za-z0-9_]*$/.test(effect.as) || contextKey in context)) throw new Error('Invalid or duplicate created-object binding');
+    if (!(contextKey in context)) {
+      context[contextKey] = created;
+    }
+
+    const objKey = `${effect.objectType}:${created._id}`;
+    afterStates.set(objKey, { ...created });
+    affectedObjects.push({
+      type: effect.objectType,
+      id: created._id,
+      changeType: 'created',
+    });
+  }
+
+  // ─── deleteLink filter resolution (Section 5.3) ───
+
+  private async resolveDeleteLinkFilter(
+    effect: DeleteLinkEffect,
+    context: Record<string, unknown>,
+    reqCtx: RequestContext,
+    schema?: ParsedSchema,
+  ): Promise<OntologyLink[]> {
+    // Resolve "from" and "to" filter references to object IDs
+    let fromId: string | undefined;
+    let toId: string | undefined;
+
+    if (effect.filter.from) {
+      const fromObj = await this.resolveTarget(effect.filter.from, context, schema, reqCtx);
+      if (this.config.strictEffects && (!fromObj || fromObj._tenantId !== reqCtx.tenantId
+        || fromObj._type !== schema?.linkTypes.find(t => t.name === effect.linkType)?.from)) throw new Error('STRICT_EFFECT: invalid deleteLink source');
+      if (fromObj) {
+        fromId = fromObj._id;
+      }
+    }
+
+    if (effect.filter.to) {
+      const toObj = await this.resolveTarget(effect.filter.to, context, schema, reqCtx);
+      if (this.config.strictEffects && (!toObj || toObj._tenantId !== reqCtx.tenantId
+        || toObj._type !== schema?.linkTypes.find(t => t.name === effect.linkType)?.to)) throw new Error('STRICT_EFFECT: invalid deleteLink destination');
+      if (toObj) {
+        toId = toObj._id;
+      }
+    }
+
+    // Query links from SPI
+    const results: OntologyLink[] = [];
+
+    if (fromId) {
+      const page = await this.config.storage.getLinks(
+        reqCtx,
+        fromId,
+        effect.linkType,
+        'outbound',
+      );
+      if (this.config.strictEffects && page.hasNextPage) throw new Error('STRICT_EFFECT: deleteLink exceeds bounded read');
+      for (const link of page.items) {
+        if (toId && link._toId !== toId) continue;
+        if (effect.filter.active !== undefined && effect.filter.active && link._deletedAt) continue;
+        results.push(link);
+      }
+    } else if (toId) {
+      const page = await this.config.storage.getLinks(
+        reqCtx,
+        toId,
+        effect.linkType,
+        'inbound',
+      );
+      if (this.config.strictEffects && page.hasNextPage) throw new Error('STRICT_EFFECT: deleteLink exceeds bounded read');
+      for (const link of page.items) {
+        if (effect.filter.active !== undefined && effect.filter.active && link._deletedAt) continue;
+        results.push(link);
+      }
+    }
+
+    return results;
+  }
+
+  // ─── Expression resolution ───
+
+  /**
+   * Resolve a simple expression from the immutable action context.
+   *
+   * Resolution order:
+   * 1. "'literal'" -> string literal (single-quoted within double-quoted YAML)
+   * 2. "now" -> current timestamp
+   * 3. Dot-path resolution: "params.field", "patient.status", etc.
+   *    - If the root key exists in context, resolve the path
+   *    - If an OntologyObject is reached, return its _id
+   * 4. Fallback: if the root key is NOT in context, treat as literal string
+   *    (e.g. "ACTIVE", "DISCHARGED", "OCCUPIED")
+   */
+  /**
+   * For event side-effects, resolve each `data` value as a context expression
+   * (string values only) so the emitted CloudEvent carries resolved values
+   * rather than literal expression strings. Non-event configs are returned
+   * unchanged. Returns a shallow copy; the original manifest config is not
+   * mutated.
+   */
+  private resolveSideEffectConfig(
+    type: string,
+    config: Record<string, unknown>,
+    context: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (type !== 'event') return config;
+    const data = config['data'];
+    if (!data || typeof data !== 'object') return config;
+    const resolvedData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      resolvedData[key] = typeof value === 'string' ? this.resolveExpression(value, context) : value;
+    }
+    return { ...config, data: resolvedData };
+  }
+
+  /**
+   * Write an audit record for a denied action (authorize/consent stage).
+   * Denials return before the post-commit audit step, so without this the
+   * immutable trail would record only successes — IG/security review needs
+   * evidence of refused access too. Best-effort: audit failure never changes
+   * the action's response.
+   */
+  private async auditDenied(
+    actionId: string,
+    actor: ActionActor,
+    actionType: string,
+    reqCtx: RequestContext,
+    denialReason: string,
+    opts?: { consentDenied?: boolean; subjectId?: string },
+  ): Promise<void> {
+    if (!this.config.auditWriter) return;
+    try {
+      await this.config.auditWriter.write({
+        id: `audit_${actionId}`,
+        tenantId: reqCtx.tenantId,
+        timestamp: now(),
+        traceId: reqCtx.traceId ?? actionId,
+        actor: { type: actor.type, id: actor.id, roles: actor.roles, ip: actor.ip },
+        operation: {
+          type: 'action',
+          actionType,
+          actionId,
+          ...(opts?.subjectId ? { objectId: opts.subjectId } : {}),
+        },
+        detail: {
+          result: 'denied',
+          denialReason,
+          ...(opts?.consentDenied ? { consentDecision: 'denied' as const } : {}),
+        },
+      });
+    } catch (err) {
+      logger.warn({ err, actionId }, 'Failed to write denial audit record');
+    }
+  }
+
+  /**
+   * Mint or remove the OpenFGA relationship tuple for a created/deleted link,
+   * per the configured linkTupleMap. Tuple is `(toType:toId, relation,
+   * fromType:fromId)` — the `fromType` object holds the relation referencing
+   * the `toType` object (e.g. patient `admitted_to` ward). Best-effort:
+   * post-commit, so a tuple failure never fails the already-committed action.
+   */
+  private async syncLinkTuple(
+    linkType: string,
+    changeType: 'created' | 'updated' | 'deleted',
+    fromId: string,
+    toId: string,
+  ): Promise<void> {
+    const writer = this.config.relationshipWriter;
+    const mapping = this.config.linkTupleMap?.get(linkType);
+    if (!writer || !mapping || !fromId || !toId) return;
+    if (changeType !== 'created' && changeType !== 'deleted') return;
+
+    const user = `${mapping.toType}:${toId}`;
+    const resource = `${mapping.fromType}:${fromId}`;
+    try {
+      if (changeType === 'created') {
+        await writer.writeRelationship(user, mapping.relation, resource);
+      } else {
+        await writer.deleteRelationship(user, mapping.relation, resource);
+      }
+    } catch (err) {
+      logger.warn({ err, linkType, relation: mapping.relation }, 'Failed to sync ReBAC tuple for link');
+    }
+  }
+
+  private resolveExpression(expr: string, context: Record<string, unknown>): unknown {
+    // String literal: 'VALUE'
+    if (expr.startsWith("'") && expr.endsWith("'")) {
+      return expr.slice(1, -1);
+    }
+    // Typed scalar literals in effect mappings, not general CEL evaluation.
+    // Leaving these as strings made Boolean ontology properties fail real CEL.
+    if (expr === 'true') return true;
+    if (expr === 'false') return false;
+    if (expr === 'null') return null;
+    if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(expr)) {
+      const number = Number(expr);
+      if (Number.isFinite(number)) return number;
+    }
+
+    // "now" -> timestamp
+    if (expr === 'now') {
+      return context['now'] ?? now();
+    }
+
+    // Dot-path resolution: "params.destination", "patient.currentWard", etc.
+    const parts = expr.split('.');
+    const rootKey = parts[0]!;
+
+    // If the root key doesn't exist in context, treat the whole expression
+    // as a literal string value (e.g. "ACTIVE", "DISCHARGED", "HOME")
+    if (!(rootKey in context)) {
+      return expr;
+    }
+
+    let current: unknown = context;
+
+    for (const part of parts) {
+      if (current === null || current === undefined) return null;
+      if (typeof current === 'object') {
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        return null;
+      }
+    }
+
+    // If the resolved value is an OntologyObject, return its _id
+    // (used when setting properties like "patient" on a DischargeRecord)
+    if (
+      current !== null &&
+      current !== undefined &&
+      typeof current === 'object' &&
+      '_id' in (current as Record<string, unknown>) &&
+      '_type' in (current as Record<string, unknown>)
+    ) {
+      return (current as OntologyObject)._id;
+    }
+
+    return current ?? null;
+  }
+
+  /**
+   * Resolve a dotted target path to an OntologyObject.
+   *
+   * Unlike resolveExpression (which returns _id for objects), this returns
+   * the full object so the executor can read _type and _id from it.
+   * Supports both flat keys ("patient") and dotted paths ("patient.currentBed").
+   *
+   * When a path segment refers to a @link field (e.g. "currentBed" on Patient),
+   * the link is followed via the storage provider to resolve the target object.
+   * Resolved link targets are cached in context to avoid redundant queries.
+   */
+  private async resolveTarget(
+    target: string,
+    context: Record<string, unknown>,
+    schema?: ParsedSchema,
+    reqCtx?: RequestContext,
+  ): Promise<OntologyObject | null> {
+    const parts = target.split('.');
+    let current: unknown = context;
+
+    for (const part of parts) {
+      if (current === null || current === undefined) return null;
+      if (typeof current !== 'object') return null;
+
+      const next = (current as Record<string, unknown>)[part];
+      if (next !== undefined) {
+        current = next;
+        continue;
+      }
+
+      // Property not found directly. If current is an OntologyObject,
+      // check if 'part' is a @link field and follow the link.
+      const obj = current as Record<string, unknown>;
+      if (schema && reqCtx && obj['_type'] && obj['_id']) {
+        const objTypeDef = schema.objectTypes.find((ot) => ot.name === obj['_type']);
+        if (objTypeDef) {
+          const linkField = objTypeDef.fields.find((f) => f.name === part);
+          const linkDir = linkField?.directives.find((d) => d.kind === 'link') as
+            | { kind: 'link'; type: string; direction: string }
+            | undefined;
+
+          if (linkDir) {
+            const direction = linkDir.direction.toLowerCase() as 'outbound' | 'inbound';
+            const page = await this.config.storage.getLinks(
+              reqCtx,
+              obj['_id'] as string,
+              linkDir.type,
+              direction,
+            );
+            const link = page.items[0];
+            if (link) {
+              const targetId = direction === 'outbound' ? link._toId : link._fromId;
+              const targetType = direction === 'outbound' ? link._toType : link._fromType;
+              const resolved = await this.config.storage.getObject(reqCtx, targetType, targetId);
+              if (resolved) {
+                addIdAlias(resolved);
+                // Cache in context so subsequent references don't re-query
+                (current as Record<string, unknown>)[part] = resolved;
+                current = resolved;
+                continue;
+              }
+            }
+            // Link doesn't exist (e.g. patient has no current bed)
+            return null;
+          }
+        }
+      }
+
+      // Truly not found
+      return null;
+    }
+
+    if (
+      current !== null &&
+      current !== undefined &&
+      typeof current === 'object' &&
+      '_id' in (current as Record<string, unknown>) &&
+      '_type' in (current as Record<string, unknown>)
+    ) {
+      return current as OntologyObject;
+    }
+
+    return null;
+  }
+}

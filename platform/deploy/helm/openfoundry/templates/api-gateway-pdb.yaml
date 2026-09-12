@@ -1,0 +1,14 @@
+{{- if gt (int .Values.apiGateway.replicaCount) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openfoundry.fullname" . }}-api-gateway
+  labels:
+    {{- include "openfoundry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api-gateway
+spec:
+  minAvailable: {{ .Values.apiGateway.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "openfoundry.selectorLabels" (dict "name" "api-gateway" "release" .Release.Name) | nindent 6 }}
+{{- end }}

@@ -1,0 +1,75 @@
+extend schema @namespace(name: "lwm.demo", version: "0.1.0")
+
+enum MatterStatus {
+  NEW
+  IN_REVIEW
+  NEEDS_EVIDENCE
+  DECIDED
+  CLOSED
+}
+
+enum RiskBand {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProposalStatus {
+  PENDING
+  NEEDS_EVIDENCE
+  APPROVED
+  MODIFIED
+  REJECTED
+}
+
+enum GateStatus {
+  PASS
+  BLOCKED
+}
+
+enum ReviewDecision {
+  APPROVE
+  MODIFY
+  REJECT
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ModelStage {
+  CANDIDATE
+  ACTIVE
+  STANDBY
+  HELD
+  RETIRED
+}
+
+enum FeedbackOutcome {
+  ACCEPTED
+  CORRECTED
+  REJECTED
+  GATE_BLOCKED
+}
+
+enum EligibilityStatus {
+  ELIGIBLE
+  HELD
+}
+
+enum RuleLifecycle {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+enum ObservationKind {
+  DOCUMENT
+  EVENT
+  TESTIMONY
+  SYSTEM_SIGNAL
+}

@@ -1,0 +1,34 @@
+# TMS connector — Transaction Monitoring System ingest
+#
+# Connects to a transaction monitoring system (Actimize, Oracle FCCM, etc.)
+# to sync transaction data into the ontology for AML analysis.
+# CDC mode deferred post-MVP.
+
+datasource: TMS_Transactions
+connector: jdbc
+connection:
+  url: "${TMS_DB_URL}"
+  table: "transaction_log"
+
+mapping:
+  objectType: Transaction
+  primaryKey:
+    source: "txn_id"
+    target: "id"
+    transform: "prefix('txn-')"
+  properties:
+    referenceId: { source: "reference_number" }
+    type: { source: "txn_type" }
+    status: { source: "status" }
+    amount: { source: "amount", transform: "parseFloat()" }
+    currency: { source: "currency_code" }
+    sourceAccount: { source: "from_account" }
+    destinationAccount: { source: "to_account" }
+    transactionDate: { source: "txn_date", transform: "parseDateTime('yyyy-MM-dd HH:mm:ss')" }
+    country: { source: "jurisdiction" }
+
+sync:
+  mode: OVERLAY
+  cacheStrategy: TTL
+  cacheTTL: "PT5M"
+  writeback: false

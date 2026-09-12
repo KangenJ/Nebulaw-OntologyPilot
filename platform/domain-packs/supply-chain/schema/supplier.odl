@@ -1,0 +1,16 @@
+# Supply Chain Domain Pack — Supplier ObjectType
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+type Supplier @objectType {
+  id: ID! @primary
+  name: String! @indexed @searchable(weight: 2.0)
+  code: String! @unique @indexed
+  tier: SupplierTier!
+  contactName: String
+  contactEmail: String @sensitive
+  country: String! @indexed
+  leadTimeDays: Int @constraint(expr: "value >= 0")
+  onTimeDeliveryRate: Float
+  products: [Product!]! @link(type: "SuppliesProduct", direction: OUTBOUND)
+}

@@ -1,0 +1,48 @@
+# AML Domain Pack — LinkTypes
+#
+# Active link:
+#   AlertCase — managed by AssignAlertToCase action; groups alerts into cases.
+#
+# Implicit reference links (FK stored directly on child objects):
+#   CustomerAccount   — Account.customer stores Customer ID
+#   AccountTransaction — Transaction.sourceAccount stores Account ID
+#   CounterpartyTransaction — Transaction.destinationAccount stores Account ID
+#   TransactionAlert  — Alert.transaction stores Transaction ID
+#   AlertForCustomer  — Alert.customer stores Customer ID
+#   CaseReport        — SuspiciousActivityReport.caseRef stores Case ID
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+# ── Active link ──
+
+type AlertCase @linkType(from: "Alert", to: "Case", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+  assignedDate: DateTime!
+  assignedBy: String!
+}
+
+# ── Implicit reference links ──
+
+type CustomerAccount @linkType(from: "Customer", to: "Account", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+}
+
+type AccountTransaction @linkType(from: "Account", to: "Transaction", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+}
+
+type CounterpartyTransaction @linkType(from: "Account", to: "Transaction", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+}
+
+type TransactionAlert @linkType(from: "Transaction", to: "Alert", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+}
+
+type AlertForCustomer @linkType(from: "Customer", to: "Alert", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+}
+
+type CaseReport @linkType(from: "Case", to: "SuspiciousActivityReport", cardinality: ONE_TO_MANY) {
+  id: ID! @primary
+}

@@ -1,0 +1,84 @@
+# AML Domain Pack — Enumerations
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+enum CustomerType {
+  INDIVIDUAL
+  ORGANIZATION
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+  PROHIBITED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  REJECTED
+}
+
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+  DORMANT
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  INVESTMENT
+  CORRESPONDENT
+}
+
+enum TransactionStatus {
+  PENDING
+  CLEARED
+  FLAGGED
+  BLOCKED
+  REVERSED
+}
+
+enum TransactionType {
+  WIRE
+  ACH
+  CASH_DEPOSIT
+  CASH_WITHDRAWAL
+  INTERNAL_TRANSFER
+  FOREIGN_EXCHANGE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  INVESTIGATING
+  ESCALATED
+  DISMISSED
+  CONFIRMED
+}
+
+enum CaseStatus {
+  OPEN
+  UNDER_REVIEW
+  ESCALATED
+  CLOSED_NO_ACTION
+  CLOSED_SAR_FILED
+}
+
+enum SarStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+  REJECTED
+}

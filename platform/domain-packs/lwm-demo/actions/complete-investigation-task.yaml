@@ -1,0 +1,41 @@
+action: CompleteInvestigationTask
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "task.workspaceKey == proposal.workspaceKey"
+    error: "Task and proposal must belong to the same workspace"
+  - expr: "task.status == 'OPEN' || task.status == 'IN_PROGRESS'"
+    error: "Only open investigation tasks can be completed"
+  - expr: "proposal.status == 'NEEDS_EVIDENCE'"
+    error: "The linked proposal is not waiting for evidence"
+  - expr: "actor.hasRole('investigator') || actor.hasRole('case_reviewer') || actor.hasRole('admin')"
+    error: "Only investigators, reviewers, or admins can complete tasks"
+
+effects:
+  - type: updateObject
+    target: "task"
+    set:
+      status: "COMPLETED"
+      completedAt: "now"
+
+  - type: updateObject
+    target: "proposal"
+    set:
+      status: "PENDING"
+      gateStatus: "PASS"
+      gateReason: "Required evidence verified"
+
+sideEffects:
+  - name: emitEvidenceCompleted
+    type: event
+    config:
+      type: "lwm.demo.evidence.completed"
+      data:
+        taskNumber: "task.taskNumber"
+        proposalNumber: "proposal.proposalNumber"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

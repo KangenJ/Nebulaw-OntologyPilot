@@ -1,0 +1,61 @@
+# actions/admit-patient.yaml
+action: AdmitPatient
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "patient.status != 'ACTIVE' || patient.currentWard == null"
+    error: "Patient is already admitted to a ward"
+  - expr: "bed == null || bed.status == 'AVAILABLE'"
+    error: "Selected bed is not available"
+  - expr: "actor.hasRole('clinician') || actor.hasRole('nurse_in_charge') || actor.hasRole('admin')"
+    error: "Insufficient role for admission"
+
+effects:
+  - type: updateObject
+    target: "patient"
+    set:
+      status: "ACTIVE"
+
+  - type: createLink
+    linkType: "AdmittedTo"
+    from: "patient"
+    to: "ward"
+    properties:
+      admissionDate: "now"
+      reason: "params.reason"
+
+  - type: createLink
+    linkType: "UnderCareOf"
+    from: "patient"
+    to: "consultant"
+    properties:
+      assignedDate: "now"
+      role: "'PRIMARY'"
+
+  - type: updateObject
+    target: "bed"
+    condition: "bed != null"
+    set:
+      status: "OCCUPIED"
+
+  - type: createLink
+    linkType: "OccupiesBed"
+    from: "patient"
+    to: "bed"
+    condition: "bed != null"
+    properties:
+      assignedAt: "now"
+
+sideEffects:
+  - name: emitAdmissionEvent
+    type: event
+    config:
+      type: "nhs.acute.patient.admitted"
+      data:
+        patientId: "patient.id"
+        wardName: "ward.name"
+        consultantName: "consultant.name"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

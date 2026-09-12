@@ -1,0 +1,89 @@
+# actions/transfer-ward.yaml
+action: TransferWard
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "patient.status == 'ACTIVE'"
+    error: "Patient is not currently active"
+  - expr: "patient.currentWard != null"
+    error: "Patient is not currently admitted"
+  - expr: "patient.currentWard.id != toWard.id"
+    error: "Patient is already on the destination ward"
+  - expr: "toBed == null || toBed.status == 'AVAILABLE'"
+    error: "Selected bed is not available"
+  - expr: "actor.hasRole('clinician') || actor.hasRole('nurse_in_charge')"
+    error: "Insufficient role for ward transfer"
+
+effects:
+  # Record the transfer first, while patient.currentWard is still the origin
+  # ward (the effect snapshot resolves links pre-effect). v0.2.0 B1 — makes
+  # transfer a first-class, queryable/CDM-projectable entity.
+  - type: createObject
+    objectType: "Transfer"
+    properties:
+      patient: "patient"
+      fromWard: "patient.currentWard"
+      toWard: "toWard"
+      transferDate: "now"
+      reason: "params.reason"
+  # Reset old bed status (uses immutable snapshot, so patient.currentBed
+  # still resolves to the pre-effect bed)
+  - type: updateObject
+    target: "patient.currentBed"
+    condition: "patient.currentBed != null"
+    set:
+      status: "CLEANING"
+
+  # Terminate current admission link
+  - type: deleteLink
+    linkType: "AdmittedTo"
+    filter:
+      from: "patient"
+      active: true
+    expect: ONE
+
+  # Release current bed
+  - type: deleteLink
+    linkType: "OccupiesBed"
+    filter:
+      from: "patient"
+      active: true
+    expect: ALL
+
+  # Create new admission link to destination ward
+  - type: createLink
+    linkType: "AdmittedTo"
+    from: "patient"
+    to: "toWard"
+    properties:
+      admissionDate: "now"
+      reason: "params.reason"
+
+  # Assign new bed if specified
+  - type: updateObject
+    target: "toBed"
+    condition: "toBed != null"
+    set:
+      status: "OCCUPIED"
+
+  - type: createLink
+    linkType: "OccupiesBed"
+    from: "patient"
+    to: "toBed"
+    condition: "toBed != null"
+    properties:
+      assignedAt: "now"
+
+sideEffects:
+  - name: emitTransferEvent
+    type: event
+    config:
+      type: "nhs.acute.patient.transferred"
+      data:
+        patientId: "patient.id"
+        fromWard: "patient.currentWard.name"
+        toWard: "toWard.name"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

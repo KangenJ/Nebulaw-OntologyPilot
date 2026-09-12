@@ -1,0 +1,173 @@
+# Reference data for integration tests. Object types are nhs-acute types
+# (resolved from the nhs-acute pack loaded in the same stack). Idempotent on
+# re-boot: objects with a `name` are matched by name; unique-indexed fields
+# (Bed.number, Consultant.gmcNumber, Patient.nhsNumber) are dedup-protected.
+
+objects:
+  # ── Wards ──
+  - type: Ward
+    ref: ward-general
+    fields:
+      name: "Ward A - General"
+      specialty: "General"
+      capacity: 20
+  - type: Ward
+    ref: ward-cardiology
+    fields:
+      name: "Ward B - Cardiology"
+      specialty: "Cardiology"
+      capacity: 15
+
+  # ── Beds (BedType + BedStatus enums) ──
+  - type: Bed
+    ref: bed-a1
+    fields:
+      number: "A-1"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-a2
+    fields:
+      number: "A-2"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-b1
+    fields:
+      number: "B-1"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-b2
+    fields:
+      number: "B-2"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  # Spare beds for mutating tests (overlay-sync, performance) so they don't
+  # contend with patient-lifecycle for the a1/a2/b1/b2 beds. OccupiesBed is
+  # ONE_TO_ONE, so each admit needs its own free bed.
+  - type: Bed
+    ref: bed-a3
+    fields:
+      number: "A-3"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-a4
+    fields:
+      number: "A-4"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-b3
+    fields:
+      number: "B-3"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-a5
+    fields:
+      number: "A-5"
+      type: "STANDARD"
+      status: "AVAILABLE"
+  - type: Bed
+    ref: bed-b4
+    fields:
+      number: "B-4"
+      type: "STANDARD"
+      status: "AVAILABLE"
+
+  # ── Consultants ──
+  - type: Consultant
+    ref: consultant-smith
+    fields:
+      name: "Dr Smith"
+      gmcNumber: "GMC100001"
+      specialty: "General"
+  - type: Consultant
+    ref: consultant-jones
+    fields:
+      name: "Dr Jones"
+      gmcNumber: "GMC100002"
+      specialty: "Cardiology"
+
+  # ── Staff (general clinical/operational staff → CDM Practitioner, B4) ──
+  - type: Staff
+    ref: staff-nurse-okafor
+    fields:
+      staffId: "STAFF-0001"
+      name: "Nurse Okafor"
+      role: "NURSE"
+      specialty: "General"
+  - type: Staff
+    ref: staff-physio-patel
+    fields:
+      staffId: "STAFF-0002"
+      name: "Priya Patel"
+      role: "ALLIED_HEALTH_PROFESSIONAL"
+      specialty: "Physiotherapy"
+  - type: Staff
+    ref: staff-admin-brown
+    fields:
+      staffId: "STAFF-0003"
+      name: "Sam Brown"
+      role: "ADMINISTRATIVE"
+
+  # ── Patients (discharged; admitted via the AdmitPatient action in tests) ──
+  - type: Patient
+    ref: patient-doe
+    fields:
+      nhsNumber: "9434765919"
+      name: "Jane Doe"
+      given: "Jane"
+      family: "Doe"
+      dateOfBirth: "1990-05-15"
+      status: "DISCHARGED"
+  - type: Patient
+    ref: patient-roe
+    fields:
+      nhsNumber: "9434765927"
+      name: "John Roe"
+      given: "John"
+      family: "Roe"
+      dateOfBirth: "1985-03-20"
+      status: "DISCHARGED"
+  - type: Patient
+    ref: patient-moe
+    fields:
+      nhsNumber: "9434765935"
+      name: "Mary Moe"
+      given: "Mary"
+      family: "Moe"
+      dateOfBirth: "1975-11-01"
+      status: "DISCHARGED"
+
+links:
+  # Beds belong to wards (BedInWard: from Bed -> to Ward).
+  - type: BedInWard
+    from: bed-a1
+    to: ward-general
+  - type: BedInWard
+    from: bed-a2
+    to: ward-general
+  - type: BedInWard
+    from: bed-b1
+    to: ward-cardiology
+  - type: BedInWard
+    from: bed-b2
+    to: ward-cardiology
+  - type: BedInWard
+    from: bed-a3
+    to: ward-general
+  - type: BedInWard
+    from: bed-a4
+    to: ward-general
+  - type: BedInWard
+    from: bed-b3
+    to: ward-cardiology
+  - type: BedInWard
+    from: bed-a5
+    to: ward-general
+  - type: BedInWard
+    from: bed-b4
+    to: ward-cardiology

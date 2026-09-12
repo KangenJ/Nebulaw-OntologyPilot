@@ -1,0 +1,55 @@
+action: NativeProposeTransition
+version: 1
+reversible: false
+preconditions:
+  - expr: "actor.hasRole('investigator')"
+    error: "Proposal requires investigator"
+  - expr: "matter != null && observation != null && matter._version == params.expectedVersion"
+    error: "Matter missing or stale"
+  - expr: "observation.matter.id == matter.id && observation.verified"
+    error: "Verified evidence must belong to the same matter"
+  - expr: "(matter.currentState == 'EVIDENCE_COMPLETE' && params.toState in ['RETENTION_REQUIRED', 'MANUAL_REVIEW']) || (matter.currentState == 'NOTICE_RECEIVED' && params.toState in ['NOTICE_TIMELY', 'NOTICE_REQUIRES_CLARIFICATION']) || (matter.currentState == 'CLAIM_RECEIVED' && params.toState in ['RESPONSE_READY', 'MANUAL_REVIEW'])"
+    error: "Transition outside published demo policy"
+effects:
+  - type: updateObject
+    target: matter
+    set:
+      status: IN_REVIEW
+  - type: createObject
+    objectType: TransitionProposal
+    properties:
+      workspaceKey: lwm-demo
+      proposalNumber: params.commandKey
+      title: params.rationale
+      fromState: matter.currentState
+      toState: params.toState
+      status: PENDING
+      riskBand: MEDIUM
+      confidence: "0"
+      rationale: params.rationale
+      evidenceSummary: observation.summary
+      gateStatus: PASS
+      gateReason: "Human-authored proposal; not a model prediction"
+      proposedBy: actor.id
+      basisObservationId: observation._id
+      basisObservationVersion: observation._version
+      createdAt: now
+  - type: createLink
+    linkType: MatterProposal
+    from: matter
+    to: transitionProposal
+    properties:
+      linkedAt: now
+  - type: createObject
+    objectType: NativeCommandReceipt
+    properties:
+      commandKey: params.commandKey
+      commandHash: params.commandHash
+      actorId: actor.id
+      actionName: NativeProposeTransition
+      resultType: TransitionProposal
+      resultId: transitionProposal._id
+      traceId: params.traceId
+      createdAt: now
+
+sideEffects: []

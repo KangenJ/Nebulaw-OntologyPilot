@@ -1,0 +1,14 @@
+# Transfer — a first-class record of a ward transfer (v0.2.0 B1).
+# Previously transfer was only the TransferWard *action* with no stored entity,
+# so it could not be queried or projected to the CDM. This object is written by
+# the TransferWard action and projects to the CDM Transfer resource.
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type Transfer @objectType {
+  id: ID! @primary
+  patient: Patient!
+  fromWard: Ward!
+  toWard: Ward!
+  transferDate: DateTime!
+  reason: String
+}

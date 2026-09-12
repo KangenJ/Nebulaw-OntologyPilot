@@ -1,0 +1,18 @@
+{
+  "name": "@openfoundry/domain-pack-aml",
+  "version": "0.1.0",
+  "description": "Anti-money laundering and financial compliance domain pack",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@openfoundry/actions": "workspace:*",
+    "@openfoundry/odl": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.0"
+  }
+}

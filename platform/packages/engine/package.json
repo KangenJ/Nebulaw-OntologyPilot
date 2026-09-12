@@ -1,0 +1,36 @@
+{
+  "name": "@openfoundry/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Foundry Ontology Engine - object lifecycle, validation, and event emission",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist coverage"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@openfoundry/observability": "workspace:*",
+    "@openfoundry/odl": "workspace:*",
+    "@openfoundry/spi": "workspace:*"
+  },
+  "devDependencies": {
+    "@openfoundry/storage-memory": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,89 @@
+action: ApproveTransition
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "false"
+    error: "Retired demo action. Use the authenticated /api/lwm command extension; this manifest is reference-only."
+  - expr: "proposal.workspaceKey == matter.workspaceKey && proposal.workspaceKey == model.workspaceKey"
+    error: "Proposal, matter, and model must belong to the same workspace"
+  - expr: "proposal.status == 'PENDING'"
+    error: "Only pending proposals can be approved"
+  - expr: "proposal.gateStatus == 'PASS'"
+    error: "Deterministic policy gate must pass before approval"
+  - expr: "matter.currentState == proposal.fromState"
+    error: "Matter state changed after the proposal was created"
+  - expr: "actor.hasRole('case_reviewer') || actor.hasRole('admin')"
+    error: "Only case reviewers or admins can approve proposals"
+
+effects:
+  - type: updateObject
+    target: "proposal"
+    set:
+      status: "APPROVED"
+
+  - type: updateObject
+    target: "matter"
+    set:
+      currentState: "proposal.toState"
+      status: "DECIDED"
+
+  - type: createObject
+    objectType: "HumanReview"
+    properties:
+      workspaceKey: "proposal.workspaceKey"
+      reviewNumber: "params.reviewNumber"
+      title: "params.reviewNumber"
+      reviewer: "params.reviewer"
+      decision: "APPROVE"
+      previousState: "proposal.fromState"
+      appliedState: "proposal.toState"
+      note: "params.note"
+      reviewedAt: "now"
+
+  - type: createLink
+    linkType: "ProposalReview"
+    from: "proposal"
+    to: "humanReview"
+    properties:
+      linkedAt: "now"
+
+  - type: createObject
+    objectType: "FeedbackEvent"
+    properties:
+      workspaceKey: "proposal.workspaceKey"
+      eventNumber: "params.feedbackNumber"
+      title: "params.feedbackNumber"
+      outcome: "ACCEPTED"
+      label: "proposal.toState"
+      reason: "params.note"
+      eligibility: "ELIGIBLE"
+      modelVersion: "model.versionLabel"
+      createdAt: "now"
+
+  - type: createLink
+    linkType: "ReviewFeedback"
+    from: "humanReview"
+    to: "feedbackEvent"
+    properties:
+      linkedAt: "now"
+
+  - type: createLink
+    linkType: "ModelFeedback"
+    from: "model"
+    to: "feedbackEvent"
+    properties:
+      linkedAt: "now"
+
+sideEffects:
+  - name: emitTransitionApproved
+    type: event
+    config:
+      type: "lwm.demo.transition.approved"
+      data:
+        proposalNumber: "proposal.proposalNumber"
+        matterNumber: "matter.matterNumber"
+        modelVersion: "model.versionLabel"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

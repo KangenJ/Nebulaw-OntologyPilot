@@ -1,0 +1,39 @@
+{
+  "name": "@openfoundry/actions",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Foundry Action Engine - CEL evaluation and action execution",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist coverage"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.0",
+    "@grpc/proto-loader": "^0.8.1",
+    "@openfoundry/observability": "workspace:*",
+    "@openfoundry/odl": "workspace:*",
+    "@openfoundry/spi": "workspace:*",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@openfoundry/storage-memory": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
+  }
+}

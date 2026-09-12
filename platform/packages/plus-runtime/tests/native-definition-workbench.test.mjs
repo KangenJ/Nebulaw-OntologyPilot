@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createServer} from 'node:net';
+import {planNativeDomain,applyNativeDomainPlan} from '../../../../ops/plus-v2/native-domain-bootstrap.mjs';
+import {startNativeRuntime,readNativeRuntimeProfile} from '../../../../ops/plus-v2/runtime-host.mjs';
+import {inspectNativeDatabase} from '../../../../ops/plus-v2/native-backup.mjs';
+import {createNativeDefinitionWorkbench} from '../../../apps/lwm-demo/public-plus/native-definition-ui.js';
+
+test('empty production runtime and shipped mechanism form discover, edit, preflight, recover lost draft response, independently publish and reopen the native parameter manifest',
+  {skip:process.platform!=='linux',timeout:45000},async t=>{
+    const portServer=createServer();await new Promise(r=>portServer.listen(0,'127.0.0.1',r));const cel=portServer.address().port;await new Promise(r=>portServer.close(r));
+    const parent=mkdtempSync(join(tmpdir(),'plus-definition-workbench-')),plan=await planNativeDomain({schema:'plus-domain-bootstrap-request-v1',parentDir:parent,directoryName:'native',tenantId:'definition-workbench',workspaceKey:'synthetic',ports:{control:0,workbench:0,cel},credentialHours:1});
+    const receipt=await applyNativeDomainPlan(plan,plan.planHash),profile=readNativeRuntimeProfile(receipt.profilePath),authBytes=readFileSync(profile.authPath),policyBytes=readFileSync(profile.policyPath);let runtime;
+    t.after(async()=>{await runtime?.close();rmSync(parent,{recursive:true,force:true});});runtime=await startNativeRuntime(profile,{celBinary:process.env.LWM_CEL_BINARY});
+    let role='data_reviewer',lost=false,last=Promise.resolve(),error,busy=false;const calls=[];
+    const call=async(selected,path,body,key)=>{const credential=JSON.parse(readFileSync(join(receipt.targetDir,'access','demo-'+selected+'.json'),'utf8'));const r=await fetch(runtime.state().workbenchUrl+'/api'+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+credential.token,...(body?{'content-type':'application/json',...(key?{'idempotency-key':key}:{})}:{})},...(body?{body:JSON.stringify(body)}:{})});const data=await r.json();return {status:r.status,body:data};};
+    const api=async(path,epoch,body,key)=>{calls.push({path,body:structuredClone(body)});const r=await call(role,path,body,key);if(r.status!==200)throw Object.assign(Error(r.body.error?.code??'HTTP_FAILED'),{status:r.status});
+      if(lost&&path.endsWith('/revisions')&&body){lost=false;throw Object.assign(Error('synthetic response loss after actual commit'),{status:502});}return r.body.data;};
+    const catalog=await api('/ontology',1),nodes=new Map(),buttons=[],$=s=>{if(!nodes.has(s))nodes.set(s,{innerHTML:'',value:'',disabled:false});return nodes.get(s);};
+    let ui;const render=()=>{$('#content').innerHTML=ui.markup();buttons.length=0;for(const m of $('#content').innerHTML.matchAll(/data-definition-revision="([^"]+)"/g))buttons.push({dataset:{definitionRevision:m[1]}});ui.bind();};
+    const run=fn=>{if(busy)return;busy=true;error=undefined;last=fn(1).catch(e=>error=e).finally(()=>busy=false);return last;};
+    ui=createNativeDefinitionWorkbench({document:{querySelector:$,querySelectorAll:s=>s==='[data-definition-revision]'?buttons:[]},api,run,isBusy:()=>busy,getCatalog:()=>catalog,getPrincipal:()=>({id:'demo-'+role,roles:[role]}),onRender:render});render();
+    const discover=async()=>{$('#definition-candidates-refresh').onclick();await last;assert.equal(error,undefined);$('#definition-candidate-key').value='task.completion';$('#definition-candidate-key').onchange();$('#definition-candidate-load').onclick();await last;assert.equal(error,undefined);};
+    const before=inspectNativeDatabase(profile.dbPath);assert.equal(before.objectsByType.PlusDefinitionRevision,undefined);await discover();
+    assert.equal(inspectNativeDatabase(profile.dbPath).stateHash,before.stateHash,'candidate browsing is not publication');
+    $('#definition-title').value='SYNTHETIC form-reviewed task completion';$('#definition-title').oninput();$('#definition-edit-form').onsubmit({preventDefault(){}});await last;assert.equal(error,undefined);
+    assert.equal(inspectNativeDatabase(profile.dbPath).stateHash,before.stateHash,'server preflight does not persist a draft');
+    lost=true;$('#definition-save').onclick();await last;assert.match(error.message,/response loss/);assert.equal(inspectNativeDatabase(profile.dbPath).objectsByType.PlusDefinitionRevision,1);
+    $('#definition-recover').onclick();await last;assert.equal(error,undefined);assert.equal(calls.filter(c=>c.path.endsWith('/revisions')&&c.body).length,1,'query same original revision, not another POST');
+    $('#definition-validate').onclick();await last;assert.equal(error,undefined);const rows=(await call(role,'/definitions/task.completion/revisions')).body.data;assert.equal(rows.length,1);assert.equal(rows[0].status,'VALIDATED');
+    const denied=await call(role,'/definitions/task.completion/revisions/'+rows[0]._id+'/review',{expectedVersion:rows[0]._version,decision:'APPROVE'});assert.equal(denied.status,403);
+    role='model_owner';ui.reset();render();await discover();buttons[0].onclick();await last;assert.equal(error,undefined);$('#definition-approve').onclick();await last;assert.equal(error,undefined);
+    const parameters=(await call('viewer','/definitions/task.completion/parameters')).body.data;assert.equal(parameters.definition.title,'SYNTHETIC form-reviewed task completion');assert.equal(parameters.predictionReady,false);assert.equal(parameters.executionAuthorized,false);assert.equal(parameters.variables.find(v=>v.key==='report').source.path.linkType,'TaskObservation');
+    const after=inspectNativeDatabase(profile.dbPath);for(const type of ['Matter','InvestigationTask','TaskCompletionVerification','PlusModelRelease','PlusExecution'])assert.equal(after.objectsByType[type],undefined,'form must not seed '+type);
+    assert.deepEqual(readFileSync(profile.authPath),authBytes);assert.deepEqual(readFileSync(profile.policyPath),policyBytes);await runtime.close();runtime=await startNativeRuntime(profile,{celBinary:process.env.LWM_CEL_BINARY});
+    assert.equal((await call('viewer','/definitions/task.completion/parameters')).body.data.contentHash,parameters.contentHash);assert.equal(inspectNativeDatabase(profile.dbPath).stateHash,after.stateHash);
+    assert.equal((await fetch(runtime.state().workbenchUrl+'/native-definition-ui.js')).status,200);
+  });

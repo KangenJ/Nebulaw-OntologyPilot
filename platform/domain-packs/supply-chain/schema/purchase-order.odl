@@ -1,0 +1,21 @@
+# Supply Chain Domain Pack — PurchaseOrder ObjectType
+#
+# supplier and product are implicit reference fields (foreign keys).
+# Per the SuppliesProduct/OrderedFrom link type declarations in links.odl,
+# graph-based traversal is available when links are populated by the
+# link-sync pipeline. The action stores IDs directly on the object.
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+type PurchaseOrder @objectType {
+  id: ID! @primary
+  orderNumber: String! @unique @indexed @immutable
+  status: OrderStatus!
+  supplier: Supplier!
+  product: Product!
+  quantity: Int! @constraint(expr: "value > 0")
+  unitCost: Float! @constraint(expr: "value > 0")
+  currency: String!
+  requestedDeliveryDate: DateTime!
+  notes: String
+}

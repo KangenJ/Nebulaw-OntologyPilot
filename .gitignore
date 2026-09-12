@@ -1,0 +1,10 @@
+var/
+.venv/
+.tools/
+__pycache__/
+*.pyc
+*.tar.gz
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo

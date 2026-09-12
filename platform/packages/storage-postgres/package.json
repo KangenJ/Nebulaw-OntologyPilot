@@ -1,0 +1,35 @@
+{
+  "name": "@openfoundry/storage-postgres",
+  "version": "0.1.0",
+  "description": "PostgreSQL 17 + Apache AGE 1.5 StorageProvider",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist coverage"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@openfoundry/observability": "workspace:*",
+    "@openfoundry/odl": "workspace:*",
+    "@openfoundry/spi": "workspace:*",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
+    "vitest": "^3.2.7"
+  }
+}

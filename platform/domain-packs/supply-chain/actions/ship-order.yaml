@@ -1,0 +1,48 @@
+# actions/ship-order.yaml
+action: ShipOrder
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "order.status == 'CONFIRMED' || order.status == 'IN_PRODUCTION'"
+    error: "Order must be confirmed or in production to ship"
+  - expr: "origin.status == 'OPERATIONAL'"
+    error: "Origin facility must be operational"
+  - expr: "destination.status == 'OPERATIONAL'"
+    error: "Destination facility must be operational"
+  - expr: "actor.hasRole('logistics_manager') || actor.hasRole('supply_chain_admin')"
+    error: "Only logistics managers or supply chain admins can ship orders"
+
+effects:
+  - type: updateObject
+    target: "order"
+    set:
+      status: "SHIPPED"
+
+  - type: createObject
+    objectType: "Shipment"
+    properties:
+      trackingNumber: "params.trackingNumber"
+      status: "IN_TRANSIT"
+      transportMode: "params.transportMode"
+      quantity: "order.quantity"
+      departureDate: "now"
+      estimatedArrival: "params.estimatedArrival"
+      order: "order"
+      origin: "origin"
+      destination: "destination"
+
+sideEffects:
+  - name: emitShipmentCreatedEvent
+    type: event
+    config:
+      type: "supply.chain.shipment.created"
+      data:
+        orderNumber: "order.orderNumber"
+        trackingNumber: "params.trackingNumber"
+        origin: "origin.name"
+        destination: "destination.name"
+        transportMode: "params.transportMode"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

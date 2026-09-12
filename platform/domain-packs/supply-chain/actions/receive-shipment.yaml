@@ -1,0 +1,58 @@
+# actions/receive-shipment.yaml
+action: ReceiveShipment
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "shipment.status == 'IN_TRANSIT' || shipment.status == 'DELAYED'"
+    error: "Shipment must be in transit or delayed to receive"
+  - expr: "actor.hasRole('warehouse_manager') || actor.hasRole('logistics_manager') || actor.hasRole('supply_chain_admin')"
+    error: "Only warehouse managers, logistics managers, or supply chain admins can receive shipments"
+
+effects:
+  - type: updateObject
+    target: "shipment"
+    set:
+      status: "DELIVERED"
+      actualArrival: "now"
+
+  # Mark the purchase order as delivered
+  - type: updateObject
+    target: "order"
+    set:
+      status: "DELIVERED"
+
+  # Update inventory at the destination facility
+  - type: updateObject
+    target: "inventoryRecord"
+    condition: "inventoryRecord != null"
+    set:
+      quantity: "params.receivedQuantity"
+      stockLevel: "params.stockLevel"
+      lastCountDate: "now"
+
+sideEffects:
+  - name: emitShipmentReceivedEvent
+    type: event
+    config:
+      type: "supply.chain.shipment.received"
+      data:
+        trackingNumber: "shipment.trackingNumber"
+        orderNumber: "order.orderNumber"
+        receivedQuantity: "params.receivedQuantity"
+        facility: "destination.name"
+
+  - name: notifyStockLevelChange
+    type: webhook
+    config:
+      url: "${INVENTORY_WEBHOOK_URL}"
+      method: POST
+      body:
+        productSku: "product.sku"
+        facility: "destination.code"
+        newQuantity: "params.receivedQuantity"
+        stockLevel: "params.stockLevel"
+    retries: 3
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

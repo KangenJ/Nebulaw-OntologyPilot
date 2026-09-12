@@ -1,0 +1,58 @@
+# Field-level permission configuration for NHS Acute domain pack.
+#
+# Maps object types to role-based field visibility rules per spec Section 7.1.3.
+# Fields not listed in any relation are never visible unless in alwaysVisible.
+#
+# Field names MUST match the ObjectType schema (patient.odl, discharge-record.odl).
+# Virtual @link fields and system fields (_id, _redactedFields, etc.) are not
+# subject to redaction and should not be listed here.
+
+- objectType: Patient
+  alwaysVisible:
+    - id
+    - status
+  fieldsByRelation:
+    clinician:
+      - nhsNumber
+      - name
+      - family
+      - given
+      - dateOfBirth
+      - triageCategory
+    nurse_in_charge:
+      - nhsNumber
+      - name
+      - family
+      - given
+      - dateOfBirth
+      - triageCategory
+    admin:
+      - nhsNumber
+      - name
+      - family
+      - given
+      - dateOfBirth
+    viewer:
+      - name
+      - family
+      - given
+
+- objectType: DischargeRecord
+  alwaysVisible:
+    - id
+    - dischargeDate
+  fieldsByRelation:
+    clinician:
+      - patient
+      - ward
+      - destination
+      - notes
+    nurse_in_charge:
+      - patient
+      - ward
+      - destination
+      - notes
+    viewer:
+      - patient
+      - ward
+      - destination

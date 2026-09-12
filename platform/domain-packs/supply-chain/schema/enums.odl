@@ -1,0 +1,59 @@
+# Supply Chain Domain Pack — Enumerations
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+enum FacilityType {
+  FACTORY
+  WAREHOUSE
+  DISTRIBUTION_CENTER
+  PORT
+}
+
+enum FacilityStatus {
+  OPERATIONAL
+  MAINTENANCE
+  DISRUPTED
+  CLOSED
+}
+
+enum SupplierTier {
+  STRATEGIC
+  PREFERRED
+  APPROVED
+  PROBATION
+}
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  CONFIRMED
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum ShipmentStatus {
+  PENDING
+  IN_TRANSIT
+  DELAYED
+  CUSTOMS_HOLD
+  DELIVERED
+  LOST
+}
+
+enum TransportMode {
+  SEA
+  AIR
+  ROAD
+  RAIL
+  MULTIMODAL
+}
+
+enum StockLevel {
+  OVERSTOCKED
+  ADEQUATE
+  LOW
+  CRITICAL
+  STOCKOUT
+}

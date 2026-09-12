@@ -1,0 +1,16 @@
+{
+  "name": "@openfoundry/domain-pack-core",
+  "version": "1.0.0",
+  "description": "Open Foundry core domain pack — base interfaces, value types, and custom scalars",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@openfoundry/odl": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.2.7"
+  }
+}

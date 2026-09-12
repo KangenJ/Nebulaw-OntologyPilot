@@ -1,0 +1,69 @@
+model
+  schema 1.1
+
+type user
+
+type matter
+  relations
+    define case_reviewer: [user]
+    define investigator: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: case_reviewer or investigator or auditor or admin
+
+type rule_version
+  relations
+    define case_reviewer: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: case_reviewer or auditor or admin
+
+type observation
+  relations
+    define case_reviewer: [user]
+    define investigator: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: case_reviewer or investigator or auditor or admin
+
+type transition_proposal
+  relations
+    define case_reviewer: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: case_reviewer or auditor or admin
+    define can_approve: case_reviewer or admin
+    define can_reject: case_reviewer or admin
+    define can_request_evidence: case_reviewer or admin
+
+type human_review
+  relations
+    define case_reviewer: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: case_reviewer or auditor or admin
+
+type investigation_task
+  relations
+    define investigator: [user]
+    define case_reviewer: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: investigator or case_reviewer or auditor or admin
+    define can_complete: investigator or case_reviewer or admin
+
+type feedback_event
+  relations
+    define model_owner: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: model_owner or auditor or admin
+
+type model_version
+  relations
+    define model_owner: [user]
+    define auditor: [user]
+    define admin: [user]
+    define viewer: model_owner or auditor or admin
+    define can_promote: model_owner or admin
+    define can_rollback: model_owner or admin

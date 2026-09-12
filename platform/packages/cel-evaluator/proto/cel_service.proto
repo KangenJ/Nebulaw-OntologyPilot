@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package cel;
+
+option go_package = "github.com/openfoundry/cel-evaluator/proto";
+
+import "google/protobuf/struct.proto";
+
+// CelEvaluator provides CEL expression evaluation as a gRPC service.
+// Per Open Foundry Spec v2 Section 5.2.4, CEL runtime evaluation MUST use
+// a canonical evaluator. This Go sidecar is the authoritative runtime.
+service CelEvaluator {
+  // Evaluate a single CEL expression.
+  rpc Evaluate(EvalRequest) returns (EvalResponse);
+
+  // Evaluate multiple CEL expressions in a single round-trip.
+  // Reduces gRPC overhead when actions have multiple preconditions/effects.
+  rpc EvaluateBatch(BatchEvalRequest) returns (BatchEvalResponse);
+}
+
+// TypeEntry describes a variable's type for the CEL type environment.
+message TypeEntry {
+  string name = 1;
+  string cel_type = 2; // e.g. "string", "int", "bool", "double",
+                       // "google.protobuf.Timestamp", "google.protobuf.Duration",
+                       // "map" (for object types)
+}
+
+// TypeEnv declares the types of all variables available in a CEL expression.
+message TypeEnv {
+  repeated TypeEntry entries = 1;
+}
+
+// EvalRequest is a single CEL evaluation request.
+message EvalRequest {
+  // The CEL expression to evaluate.
+  string expression = 1;
+
+  // Variables available to the expression, keyed by name.
+  // Values use google.protobuf.Value for dynamic typing.
+  map<string, google.protobuf.Value> variables = 2;
+
+  // Type declarations for variables so CEL can type-check.
+  TypeEnv type_env = 3;
+}
+
+// EvalResponse is the result of a single CEL evaluation.
+message EvalResponse {
+  // The result of evaluating the expression.
+  google.protobuf.Value result = 1;
+
+  // Non-empty if evaluation failed.
+  string error = 2;
+}
+
+// BatchEvalRequest evaluates multiple expressions against the same variable set.
+message BatchEvalRequest {
+  // Expressions to evaluate.
+  repeated string expressions = 1;
+
+  // Shared variables for all expressions.
+  map<string, google.protobuf.Value> variables = 2;
+
+  // Shared type environment.
+  TypeEnv type_env = 3;
+}
+
+// BatchEvalResult is the result of one expression in a batch.
+message BatchEvalResult {
+  string expression = 1;
+  google.protobuf.Value result = 2;
+  string error = 3;
+}
+
+// BatchEvalResponse contains results for all expressions in a batch.
+message BatchEvalResponse {
+  repeated BatchEvalResult results = 1;
+}

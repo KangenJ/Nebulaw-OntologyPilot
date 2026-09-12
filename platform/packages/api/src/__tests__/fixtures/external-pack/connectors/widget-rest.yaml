@@ -1,0 +1,21 @@
+datasource: Widget_API
+connector: rest
+connection:
+  url: "${WIDGET_API_URL}"
+  table: "widgets"
+
+mapping:
+  objectType: Widget
+  primaryKey:
+    source: "widget_id"
+    target: "id"
+  properties:
+    serialNumber: { source: "serial" }
+    name: { source: "name" }
+    status: { source: "state" }
+
+sync:
+  mode: OVERLAY
+  cacheStrategy: TTL
+  cacheTTL: "PT5M"
+  writeback: false

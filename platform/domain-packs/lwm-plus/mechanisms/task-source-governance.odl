@@ -1,0 +1,33 @@
+# Explicitly reviewed engineering bridge; never auto-loaded into v1.
+enum TaskVerificationValidity { ACTIVE REVOKED }
+enum TaskCompletionBasisStatus { VERIFIED UNVERIFIED CONFLICTED }
+extend type TaskCompletionVerification {
+  validity: TaskVerificationValidity
+  revokedAt: DateTime
+  revokedBy: String
+  revocationReason: String @sensitive
+}
+type TaskCompletionRepair @objectType {
+  id: ID! @primary
+  repairKey: String! @unique @immutable
+  previousTaskVersion: Int! @immutable
+  result: TaskCompletion! @immutable
+  targetTime: DateTime @immutable
+  basisStatus: TaskCompletionBasisStatus! @immutable
+  basis: JSON! @immutable @sensitive
+  recordedAt: DateTime! @immutable
+  recordedBy: String! @immutable
+  classification: PlusClassification! @immutable
+  reason: String! @immutable @sensitive
+}
+type TaskCompletionRepairs @linkType(from:"InvestigationTask",to:"TaskCompletionRepair",cardinality:ONE_TO_MANY) { id:ID! @primary }
+type TaskRepairSourceChange @linkType(from:"TaskCompletionRepair",to:"PlusSourceChange",cardinality:MANY_TO_ONE) { id:ID! @primary }
+type NativeInvalidateTaskVerification @actionType(permission:"can_publish") {
+  verification:TaskCompletionVerification! @param expectedVersion:Int! @param reason:String! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}
+type NativeRebuildTaskCompletion @actionType(permission:"can_publish") {
+  task:InvestigationTask! @param expectedVersion:Int! @param result:TaskCompletion! @param targetTime:DateTime @param
+  basisStatus:TaskCompletionBasisStatus! @param basis:JSON! @param reason:String! @param classification:PlusClassification! @param
+  commandKey:String! @param commandHash:String! @param traceId:String! @param
+}

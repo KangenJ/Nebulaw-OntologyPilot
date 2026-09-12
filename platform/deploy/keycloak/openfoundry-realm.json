@@ -1,0 +1,92 @@
+{
+  "realm": "openfoundry",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      { "name": "clinician", "description": "Clinical staff" },
+      { "name": "nurse_in_charge", "description": "Charge nurse" },
+      { "name": "receptionist", "description": "ED reception" },
+      { "name": "porter", "description": "Porter (bed cleaning)" },
+      { "name": "admin", "description": "Platform administrator" },
+      { "name": "compliance_analyst", "description": "Compliance / IG analyst" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "openfoundry",
+      "name": "Open Foundry API",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "openfoundry",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false",
+            "multivalued": "false"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "dr-test",
+      "enabled": true,
+      "email": "dr-test@openfoundry.local",
+      "firstName": "Test",
+      "lastName": "Clinician",
+      "emailVerified": true,
+      "attributes": { "tenant_id": ["default"] },
+      "credentials": [{ "type": "password", "value": "test-password", "temporary": false }],
+      "realmRoles": ["clinician", "nurse_in_charge"]
+    },
+    {
+      "username": "admin-test",
+      "enabled": true,
+      "email": "admin-test@openfoundry.local",
+      "firstName": "Test",
+      "lastName": "Admin",
+      "emailVerified": true,
+      "requiredActions": [],
+      "attributes": { "tenant_id": ["default"] },
+      "credentials": [{ "type": "password", "value": "test-password", "temporary": false }],
+      "realmRoles": ["admin"]
+    }
+  ]
+}

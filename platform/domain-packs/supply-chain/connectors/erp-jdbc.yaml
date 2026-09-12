@@ -1,0 +1,31 @@
+# ERP connector — SAP/Oracle ingest for product master and purchase orders
+#
+# Connects to an enterprise ERP system (SAP S/4HANA, Oracle EBS, etc.)
+# to sync product catalog and order data into the ontology.
+# CDC mode deferred post-MVP.
+
+datasource: ERP_Products
+connector: jdbc
+connection:
+  url: "${ERP_DB_URL}"
+  table: "material_master"
+
+mapping:
+  objectType: Product
+  primaryKey:
+    source: "material_id"
+    target: "id"
+    transform: "prefix('product-')"
+  properties:
+    sku: { source: "material_number" }
+    name: { source: "material_description" }
+    category: { source: "material_group" }
+    unitOfMeasure: { source: "base_uom" }
+    reorderPoint: { source: "reorder_point", transform: "parseInt()" }
+    reorderQuantity: { source: "reorder_qty", transform: "parseInt()" }
+
+sync:
+  mode: OVERLAY
+  cacheStrategy: TTL
+  cacheTTL: "PT15M"
+  writeback: false

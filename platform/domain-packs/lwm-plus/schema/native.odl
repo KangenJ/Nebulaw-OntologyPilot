@@ -1,0 +1,53 @@
+extend schema @namespace(name: "lwm.plus", version: "0.1.0")
+
+type NativeCommandReceipt @objectType {
+  id: ID! @primary
+  commandKey: String! @unique @immutable
+  commandHash: String! @immutable
+  actorId: String! @indexed @immutable
+  actionName: String! @indexed @immutable
+  resultType: String! @immutable
+  resultId: String! @immutable
+  traceId: String! @indexed @immutable
+  createdAt: DateTime! @immutable
+}
+
+type NativeImportMatter @actionType(permission: "can_import") {
+  matterNumber: String! @param
+  title: String! @param
+  jurisdiction: String! @param
+  currentState: String! @param
+  evidence: String! @param
+  source: String! @param
+  commandKey: String! @param
+  commandHash: String! @param
+  traceId: String! @param
+}
+type NativeVerifyObservation @actionType(permission: "can_verify") {
+  observation: Observation! @param
+  expectedVersion: Int! @param
+  commandKey: String! @param
+  commandHash: String! @param
+  traceId: String! @param
+}
+type NativeProposeTransition @actionType(permission: "can_propose") {
+  matter: Matter! @param
+  observation: Observation! @param
+  expectedVersion: Int! @param
+  toState: String! @param
+  rationale: String! @param
+  commandKey: String! @param
+  commandHash: String! @param
+  traceId: String! @param
+}
+type NativeReviewTransition @actionType(permission: "can_review") {
+  matter: Matter! @param
+  proposal: TransitionProposal! @param
+  observation: Observation! @param
+  expectedVersion: Int! @param
+  decision: String! @param
+  note: String! @param
+  commandKey: String! @param
+  commandHash: String! @param
+  traceId: String! @param
+}

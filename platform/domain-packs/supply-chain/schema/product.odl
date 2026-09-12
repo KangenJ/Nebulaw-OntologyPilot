@@ -1,0 +1,14 @@
+# Supply Chain Domain Pack — Product ObjectType
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+type Product @objectType {
+  id: ID! @primary
+  sku: String! @unique @indexed
+  name: String! @indexed @searchable(weight: 2.0)
+  category: String! @indexed
+  unitOfMeasure: String!
+  reorderPoint: Int! @constraint(expr: "value >= 0")
+  reorderQuantity: Int! @constraint(expr: "value > 0")
+  suppliers: [Supplier!]! @link(type: "SuppliesProduct", direction: INBOUND)
+}

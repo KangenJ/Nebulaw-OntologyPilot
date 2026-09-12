@@ -1,0 +1,8 @@
+action: NativePlusCommand
+version: 1
+reversible: false
+preconditions:
+  - expr: "false"
+    error: "Only the server-validated Plus plan compiler may supply effect plans"
+effects: []
+sideEffects: []

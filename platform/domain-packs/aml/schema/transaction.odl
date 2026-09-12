@@ -1,0 +1,21 @@
+# AML Domain Pack — Transaction ObjectType
+#
+# Financial transaction between accounts. Flagged transactions
+# generate alerts for compliance review.
+# sourceAccount and destinationAccount are FK references to Account.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type Transaction @objectType {
+  id: ID! @primary
+  referenceId: String! @unique @indexed @immutable
+  type: TransactionType!
+  status: TransactionStatus!
+  amount: Float! @constraint(expr: "value > 0")
+  currency: String!
+  sourceAccount: String! @indexed
+  destinationAccount: String @indexed
+  transactionDate: DateTime!
+  description: String
+  country: String @indexed
+}

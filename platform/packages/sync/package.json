@@ -1,0 +1,37 @@
+{
+  "name": "@openfoundry/sync",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Open Foundry Sync Engine - connector interface and source connectors",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@openfoundry/observability": "workspace:*",
+    "@openfoundry/spi": "workspace:*",
+    "pg": "^8.23.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0"
+}

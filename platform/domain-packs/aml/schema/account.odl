@@ -1,0 +1,18 @@
+# AML Domain Pack — Account ObjectType
+#
+# Financial account belonging to a customer.
+# Uses FK reference to Customer (not @link) since the relationship
+# is set at account creation and not actively managed by actions.
+
+extend schema @namespace(name: "aml", version: "0.1.0")
+
+type Account @objectType {
+  id: ID! @primary
+  accountNumber: String! @unique @indexed @immutable @sensitive
+  type: AccountType!
+  status: AccountStatus!
+  currency: String!
+  customer: String! @indexed
+  openDate: Date!
+  lastActivityDate: DateTime
+}

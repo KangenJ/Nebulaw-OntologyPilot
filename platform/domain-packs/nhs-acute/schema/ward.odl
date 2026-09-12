@@ -1,0 +1,15 @@
+# NHS Acute Domain Pack — Ward ObjectType
+#
+# Per MVP Section 4.1.
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type Ward @objectType {
+  id: ID! @primary
+  name: String! @indexed
+  specialty: String!
+  capacity: Int! @constraint(expr: "value > 0")
+  currentOccupancy: Int @computed(fn: "countLinks", args: { type: "AdmittedTo" }, cache: LAZY)
+  patients: [Patient!]! @link(type: "AdmittedTo", direction: INBOUND)
+  beds: [Bed!]! @link(type: "BedInWard", direction: INBOUND)
+}

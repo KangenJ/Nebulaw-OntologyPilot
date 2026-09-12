@@ -1,0 +1,19 @@
+{
+  "name": "@openfoundry/lwm-demo-app",
+  "version": "0.1.0",
+  "description": "Standalone governed LWM demonstration workbench",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node check.mjs",
+    "platform": "node openfoundry-dev.mjs",
+    "platform:native": "node native-dev.mjs",
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:native": "node --test tests/native-platform.acceptance.mjs",
+    "typecheck": "node check.mjs"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

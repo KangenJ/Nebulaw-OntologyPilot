@@ -1,0 +1,15 @@
+# Supply Chain Domain Pack — Facility ObjectType
+
+extend schema @namespace(name: "supply.chain", version: "0.1.0")
+
+type Facility @objectType {
+  id: ID! @primary
+  name: String! @indexed @searchable(weight: 2.0)
+  code: String! @unique @indexed
+  type: FacilityType!
+  status: FacilityStatus!
+  address: String
+  country: String! @indexed
+  capacity: Int! @constraint(expr: "value > 0")
+  currentUtilization: Int @computed(fn: "countLinks", args: { type: "InventoryAt" }, cache: LAZY)
+}

@@ -1,0 +1,19 @@
+# NHS Acute Domain Pack — DischargeRecord ObjectType
+#
+# Per MVP Section 4.1.
+# Note: patient and ward are implicit reference fields (foreign keys),
+# not link-type relationships. Per Section 4.2: "DischargedPatient and
+# DischargedFromWard are implicit reference links — they use @link on fields
+# but do not need separate @linkType declarations since DischargeRecord
+# stores the foreign keys directly."
+
+extend schema @namespace(name: "nhs.acute", version: "0.2.0")
+
+type DischargeRecord @objectType {
+  id: ID! @primary
+  patient: Patient!
+  ward: Ward!
+  destination: DischargeDestination!
+  dischargeDate: DateTime!
+  notes: String
+}

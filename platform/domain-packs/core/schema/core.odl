@@ -1,0 +1,46 @@
+# Open Foundry Core Domain Pack — openfoundry.core v1.0.0
+#
+# Ships with every installation. Provides base interfaces, value types,
+# and custom scalars per Open Foundry spec Section 10.3.
+
+extend schema @namespace(name: "openfoundry.core", version: "1.0.0")
+
+# ─── Custom Scalars ───────────────────────────────────────────────────
+
+scalar Date
+scalar DateTime
+scalar Duration
+scalar GeoPoint
+scalar JSON
+scalar URI
+
+# ─── Base Interfaces ──────────────────────────────────────────────────
+
+interface Identifiable {
+  id: ID! @primary
+}
+
+interface Auditable {
+  createdAt: DateTime! @readonly
+  createdBy: String! @readonly
+  updatedAt: DateTime! @readonly
+  updatedBy: String! @readonly
+}
+
+interface Locatable {
+  location: GeoPoint
+  address: String
+}
+
+interface Temporal {
+  validFrom: DateTime
+  validTo: DateTime
+}
+
+# ─── Value Types ──────────────────────────────────────────────────────
+
+interface CodeableConcept {
+  system: URI!
+  code: String!
+  display: String!
+}

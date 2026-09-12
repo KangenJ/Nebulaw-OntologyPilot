@@ -1,0 +1,44 @@
+# actions/flag-transaction.yaml
+action: FlagTransaction
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "transaction.status == 'CLEARED'"
+    error: "Only cleared transactions can be flagged"
+  - expr: "actor.hasRole('compliance_analyst') || actor.hasRole('compliance_officer')"
+    error: "Only compliance analysts or officers can flag transactions"
+
+effects:
+  - type: updateObject
+    target: "transaction"
+    set:
+      status: "FLAGGED"
+
+  - type: createObject
+    objectType: "Alert"
+    properties:
+      alertNumber: "params.alertNumber"
+      severity: "params.severity"
+      status: "OPEN"
+      ruleName: "params.ruleName"
+      score: "params.score"
+      narrative: "params.narrative"
+      transaction: "transaction"
+      customer: "customer"
+      createdDate: "now"
+
+sideEffects:
+  - name: emitTransactionFlaggedEvent
+    type: event
+    config:
+      type: "aml.transaction.flagged"
+      data:
+        referenceId: "transaction.referenceId"
+        amount: "transaction.amount"
+        currency: "transaction.currency"
+        alertNumber: "params.alertNumber"
+        severity: "params.severity"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

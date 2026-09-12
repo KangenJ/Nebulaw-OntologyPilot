@@ -1,0 +1,384 @@
+# Open Foundry — NHS Acute Pilot — Development Deployment
+# Per MVP Section 5.2: all 12 services for local development.
+
+services:
+  # ─── Infrastructure ──────────────────────────────────────────────
+
+  postgresql:
+    image: apache/age:release_PG17_1.6.0
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openfoundry}
+      POSTGRES_USER: ${POSTGRES_USER:-openfoundry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openfoundry}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - foundry
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+    ports:
+      - "${REDPANDA_PORT:-19092}:19092"
+      - "18081:18081"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - foundry
+
+  openfga-migrate:
+    image: openfga/openfga:v1.8.2
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: "postgres://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}?sslmode=disable"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    networks:
+      - foundry
+
+  openfga:
+    image: openfga/openfga:v1.8.2
+    command: run
+    ports:
+      - "${OPENFGA_PORT:-8280}:8080"
+      - "8281:8081"
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: "postgres://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}?sslmode=disable"
+      OPENFGA_PLAYGROUND_ENABLED: "true"
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+    # OpenFGA uses a distroless image (no shell/wget/curl), so in-container
+    # healthchecks are not possible.  Dependents use service_started.
+    networks:
+      - foundry
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    # --import-realm provisions the `openfoundry` realm on first boot with the
+    # client + three protocol mappers (audience, tenant_id, flat roles) the
+    # OIDC authenticator requires, plus pilot roles and test users. Removes the
+    # "Keycloak realm is not auto-provisioned" footgun (deploy/README).
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak/openfoundry-realm.json:/opt/keycloak/data/import/openfoundry-realm.json:ro
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: "jdbc:postgresql://postgresql:5432/${POSTGRES_DB:-openfoundry}"
+      KC_DB_USERNAME: ${POSTGRES_USER:-openfoundry}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080; echo -e 'GET /auth/realms/master HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; cat <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - foundry
+
+  debezium:
+    image: debezium/connect:2.7.3.Final
+    ports:
+      - "${DEBEZIUM_PORT:-8083}:8083"
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:9092
+      GROUP_ID: openfoundry-cdc
+      CONFIG_STORAGE_TOPIC: _cdc_configs
+      OFFSET_STORAGE_TOPIC: _cdc_offsets
+      STATUS_STORAGE_TOPIC: _cdc_status
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - foundry
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - foundry
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    ports:
+      - "${OTEL_PORT:-4317}:4317"
+      - "4318:4318"
+      - "8888:8888"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    # No healthcheck: the collector-contrib image is distroless (no shell, no
+    # wget/curl), so an in-container HTTP probe of the health_check extension
+    # (:13133) can never succeed. A broken probe reports the container as
+    # perpetually unhealthy, which stalls `docker compose up --wait` and the
+    # integration harness's isStackHealthy(). The collector is non-critical
+    # (telemetry export only) and starts reliably; gate nothing on it.
+    networks:
+      - foundry
+
+  # ─── Application Services ────────────────────────────────────────
+
+  cel-evaluator:
+    build:
+      context: ../packages/cel-evaluator
+      dockerfile: Dockerfile
+      args:
+        GIT_REVISION: ${GIT_REVISION:-unknown}
+    ports:
+      - "${CEL_PORT:-50051}:50051"
+    environment:
+      CEL_PORT: "50051"
+    healthcheck:
+      test: ["CMD", "grpc-health-probe", "-addr=localhost:50051"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - foundry
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: packages/api/Dockerfile
+      args:
+        GIT_REVISION: ${GIT_REVISION:-unknown}
+    ports:
+      - "${API_PORT:-4000}:4000"
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      POSTGRES_URL: "postgresql://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}"
+      OPENFGA_URL: "http://openfga:8080"
+      OPENFGA_STORE_ID: ${OPENFGA_STORE_ID:-}
+      CEL_EVALUATOR_URL: "cel-evaluator:50051"
+      REDPANDA_BROKERS: "redpanda:9092"
+      REDIS_URL: "redis://redis:6379"
+      KEYCLOAK_URL: "http://keycloak:8080/auth"
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-openfoundry}
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: api-gateway
+      DOMAIN_PACKS: ${DOMAIN_PACKS:-}
+      DOMAIN_PACKS_EXTRA_DIRS: ${DOMAIN_PACKS_EXTRA_DIRS:-}
+      # Tenant for domain-pack boot seeds. Unset → 'system', which is isolated
+      # from ordinary request tenants, so seeded reference data is NOT visible to
+      # API reads under another tenant. Set to the tenant your requests use
+      # (e.g. `default`) when seeds should be readable through the API.
+      SEED_TENANT: ${SEED_TENANT:-}
+      # OIDC fallback tenant for tokens without a `tenant_id` claim (production
+      # auth only — see docker-compose.prod-test.yaml). Opt-in; unset → fail-closed
+      # (claimless tokens rejected). Single-tenant deployments set OIDC_DEFAULT_TENANT.
+      OIDC_DEFAULT_TENANT: ${OIDC_DEFAULT_TENANT:-}
+      # Deployment policy: platform roles allowed to grant relationships / record
+      # consent. Generic default is `admin` only — no NHS roles are forced here.
+      # NHS deployments set these in .env (see .env.example):
+      #   RELATIONSHIP_GRANTER_ROLES=admin,nurse_in_charge
+      #   CONSENT_RECORDER_ROLES=admin,nurse_in_charge,clinician
+      RELATIONSHIP_GRANTER_ROLES: ${RELATIONSHIP_GRANTER_ROLES:-admin}
+      CONSENT_RECORDER_ROLES: ${CONSENT_RECORDER_ROLES:-admin}
+      # Consent vocabulary + default purpose (DataPurpose is an open string type).
+      # Unset → platform default (standard NHS/UK-IG preset, DIRECT_CARE default).
+      # A non-NHS deployment defines its own, e.g. CONSENT_PURPOSES=KYC,AML_MONITORING
+      # with DEFAULT_CONSENT_PURPOSE=KYC.
+      CONSENT_PURPOSES: ${CONSENT_PURPOSES:-}
+      DEFAULT_CONSENT_PURPOSE: ${DEFAULT_CONSENT_PURPOSE:-}
+      # Object types whose @param marks an action's consent subject. Unset →
+      # Patient (NHS). Non-NHS: e.g. CONSENT_SUBJECT_TYPES=Customer.
+      CONSENT_SUBJECT_TYPES: ${CONSENT_SUBJECT_TYPES:-}
+      # Legitimate-relationship consent exemption. Platform default is OFF; this
+      # NHS reference stack enables it (NHS Act 2006 s251 direct-care exemption).
+      # Non-NHS deployments leave it false for pure explicit-consent semantics.
+      CONSENT_DIRECT_CARE_EXEMPTION: ${CONSENT_DIRECT_CARE_EXEMPTION:-true}
+      CONSENT_EXEMPTION_PURPOSE: ${CONSENT_EXEMPTION_PURPOSE:-}
+    volumes:
+      - ${DOMAIN_PACKS_HOST_DIR:-./empty-packs}:/external-packs:ro
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      openfga:
+        condition: service_started
+      cel-evaluator:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4000/.well-known/apollo/server-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - foundry
+
+  ontology-engine:
+    build:
+      context: ..
+      dockerfile: packages/engine/Dockerfile
+      args:
+        GIT_REVISION: ${GIT_REVISION:-unknown}
+    environment:
+      NODE_ENV: development
+      PORT: "4001"
+      POSTGRES_URL: "postgresql://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: ontology-engine
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - foundry
+
+  action-executor:
+    build:
+      context: ..
+      dockerfile: packages/actions/Dockerfile
+      args:
+        GIT_REVISION: ${GIT_REVISION:-unknown}
+    environment:
+      NODE_ENV: development
+      PORT: "4002"
+      CEL_EVALUATOR_URL: "cel-evaluator:50051"
+      POSTGRES_URL: "postgresql://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}"
+      REDPANDA_BROKERS: "redpanda:9092"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: action-executor
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      cel-evaluator:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4002/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - foundry
+
+  sync-engine:
+    build:
+      context: ..
+      dockerfile: packages/sync/Dockerfile
+      args:
+        GIT_REVISION: ${GIT_REVISION:-unknown}
+    environment:
+      NODE_ENV: development
+      PORT: "4003"
+      POSTGRES_URL: "postgresql://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}"
+      REDPANDA_BROKERS: "redpanda:9092"
+      DEBEZIUM_URL: "http://debezium:8083"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: sync-engine
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      debezium:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - foundry
+
+  security-service:
+    build:
+      context: ..
+      dockerfile: packages/security/Dockerfile
+      args:
+        GIT_REVISION: ${GIT_REVISION:-unknown}
+    environment:
+      NODE_ENV: development
+      PORT: "4004"
+      POSTGRES_URL: "postgresql://${POSTGRES_USER:-openfoundry}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB:-openfoundry}"
+      OPENFGA_URL: "http://openfga:8080"
+      OPENFGA_STORE_ID: ${OPENFGA_STORE_ID:-}
+      KEYCLOAK_URL: "http://keycloak:8080/auth"
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-openfoundry}
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: security-service
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      openfga:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4004/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - foundry
+
+volumes:
+  pg_data:
+  redpanda_data:
+  redis_data:
+
+networks:
+  foundry:
+    driver: bridge

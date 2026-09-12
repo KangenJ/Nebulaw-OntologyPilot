@@ -1,0 +1,644 @@
+extend schema @namespace(name: "plus.core", version: "0.1.0")
+
+enum PlusDefinitionStatus { DRAFT VALIDATED PUBLISHED SUPERSEDED REJECTED }
+enum PlusReadiness { READY INSUFFICIENT_DATA OUT_OF_SUPPORT CONFLICTED STALE SUSPENDED }
+enum PlusClassification { SYNTHETIC AUTHORIZED_REAL IMPORTED_UNVERIFIED }
+enum PlusEpisodeStatus { OPEN CLOSED REVOKED }
+enum PlusEventKind { OBSERVATION INTERVENTION VERIFICATION CORRECTION REVOCATION }
+enum PlusRequestStatus { PROPOSED APPROVED REJECTED EXECUTED FAILED STALE }
+enum PlusDecision { APPROVE REJECT }
+enum PlusReleaseStatus { CANDIDATE EVALUATED REJECTED APPROVED REVOKED }
+enum PlusExecutionStatus { PENDING LEASED SUCCEEDED FAILED STALE CANCELLED }
+enum PlusOutboxStatus { PENDING LEASED DELIVERED FAILED }
+enum PlusOntologyStatus { DRAFT VALIDATED PUBLISHED SUPERSEDED REJECTED }
+enum PlusSourceChangeKind { CORRECTION REVOCATION }
+enum PlusSourceChangeStatus { PROPOSED APPROVED REJECTED }
+enum PlusRuleStatus { DRAFT APPROVED REJECTED REVOKED }
+
+type PlusRuleSpecification @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  ruleKey: String! @indexed @immutable
+  revision: Int! @immutable
+  definitionKey: String! @immutable
+  definitionHash: String! @immutable
+  definitionReference: JSON! @immutable
+  implementationId: String! @immutable
+  specification: JSON! @immutable @sensitive
+  specificationHash: String! @unique @immutable
+  nativeRules: JSON! @immutable @sensitive
+  policyHash: String! @immutable
+  submittedBy: String! @immutable
+  submittedAt: DateTime! @immutable
+  proposalHash: String! @immutable
+  status: PlusRuleStatus!
+  decision: JSON @sensitive
+  decisionHash: String
+  revocation: JSON @sensitive
+  revocationHash: String
+}
+type PlusRuleDefinition @linkType(from:"PlusRuleSpecification",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) { id: ID! @primary }
+
+type PlusRuleResult @objectType {
+  id: ID! @primary
+  resultKey: String! @unique @immutable
+  classification: PlusClassification! @immutable
+  payload: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  readiness: PlusReadiness!
+}
+type PlusRuleResultSpecification @linkType(from:"PlusRuleResult",to:"PlusRuleSpecification",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusRuleResultInput @linkType(from:"PlusRuleResult",to:"PlusInputSnapshot",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusRuleResultEpisode @linkType(from:"PlusRuleResult",to:"PlusEpisode",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusRuleResultDefinition @linkType(from:"PlusRuleResult",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) { id: ID! @primary }
+
+type PlusOntologyRevision @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  revision: Int! @immutable
+  parentHash: String! @immutable
+  contentHash: String! @immutable
+  bundle: JSON! @immutable @sensitive
+  submittedBy: String! @immutable
+  submittedAt: DateTime! @immutable
+  status: PlusOntologyStatus!
+  approvedBy: String
+  publishedAt: DateTime
+}
+
+type PlusOntologyHead @objectType {
+  id: ID! @primary
+  key: String! @unique @immutable
+  revisionId: String!
+  contentHash: String!
+  storageVersion: Int!
+}
+
+type PlusOntologyDecision @objectType {
+  id: ID! @primary
+  decisionKey: String! @unique @immutable
+  revisionHash: String! @immutable
+  decision: PlusDecision! @immutable
+  decidedBy: String! @immutable
+  decidedAt: DateTime! @immutable
+  reason: String! @immutable
+}
+
+type PlusDefinitionRevision @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  definitionKey: String! @immutable
+  revision: Int! @immutable @constraint(expr: "value > 0")
+  rootType: String! @immutable
+  definition: JSON! @immutable @sensitive
+  compiled: JSON! @immutable @sensitive
+  compiledHash: String! @immutable
+  definitionHash: String! @immutable
+  dependencyHash: String! @immutable
+  policyHash: String! @immutable
+  schemaRevision: String! @immutable
+  status: PlusDefinitionStatus!
+  submittedBy: String! @immutable
+  approvedBy: String
+  publishedAt: DateTime
+}
+
+type PlusEpisode @objectType {
+  id: ID! @primary
+  episodeKey: String! @unique @immutable
+  scopeKey: String! @immutable
+  rootReference: JSON! @immutable @sensitive
+  classification: PlusClassification! @immutable
+  definitionHash: String! @immutable
+  binding: JSON! @immutable @sensitive
+  bindingHash: String! @immutable
+  startedAt: DateTime! @immutable
+  endedAt: DateTime
+  streamRevision: Int! @constraint(expr: "value >= 0")
+  status: PlusEpisodeStatus!
+}
+
+# A durable knowledge cutoff. New source facts cannot be inserted into an old capture.
+type PlusStreamRevision @objectType {
+  id: ID! @primary
+  streamKey: String! @unique @immutable
+  requestHash: String! @immutable
+  streamRevision: Int! @immutable
+  rootReference: JSON! @immutable @sensitive
+  eventReferences: JSON! @immutable @sensitive
+  sourceChanges: JSON! @immutable @sensitive
+  definitionHash: String! @immutable
+  bindingHash: String! @immutable
+  capturedAt: DateTime! @immutable
+  contentHash: String! @immutable
+}
+
+type PlusSourceChange @objectType {
+  id: ID! @primary
+  changeKey: String! @unique @immutable
+  requestHash: String! @immutable
+  kind: PlusSourceChangeKind! @immutable
+  payload: JSON! @immutable @sensitive
+  submittedBy: String! @immutable
+  submittedAt: DateTime! @immutable
+  status: PlusSourceChangeStatus!
+  decidedBy: String
+  decidedAt: DateTime
+  decisionReason: String @sensitive
+  decisionHash: String
+}
+
+type PlusEvent @objectType {
+  id: ID! @primary
+  sourceKey: String! @unique @immutable
+  eventKind: PlusEventKind! @immutable
+  classification: PlusClassification! @immutable
+  sourceSystem: String! @immutable
+  sourceRecordId: String! @immutable @sensitive
+  sourceRevision: String! @immutable
+  sourceReference: JSON! @immutable @sensitive
+  eventTime: DateTime! @immutable
+  ingestedAt: DateTime! @immutable
+  variableKey: String! @immutable
+  typedValue: JSON! @immutable @sensitive
+  verification: JSON @immutable @sensitive
+  contentHash: String! @immutable
+  revoked: Boolean!
+}
+
+type PlusInputSnapshot @objectType {
+  id: ID! @primary
+  snapshotKey: String! @unique @immutable
+  requestHash: String! @immutable
+  classification: PlusClassification! @immutable
+  inputHash: String! @immutable
+  readSet: JSON! @immutable @sensitive
+  compiledInput: JSON! @immutable @sensitive
+  streamRevision: Int! @immutable
+  visibleAt: DateTime! @immutable
+  targetTime: DateTime! @immutable
+  readiness: PlusReadiness!
+}
+
+type PlusBeliefSnapshot @objectType {
+  id: ID! @primary
+  beliefKey: String! @unique @immutable
+  classification: PlusClassification! @immutable
+  distribution: JSON! @immutable @sensitive
+  explanation: JSON! @immutable @sensitive
+  engineVersion: String! @immutable
+  payload: JSON @immutable @sensitive
+  contentHash: String! @immutable
+  readiness: PlusReadiness!
+}
+
+# One current derived belief per selected-model scope and native episode.
+# This pointer is not a business fact and does not select/activate a model.
+type PlusBeliefHead @objectType {
+  id: ID! @primary
+  headKey: String! @unique @immutable
+  controlKey: String! @immutable
+  deploymentId: String! @immutable
+  episodeId: String! @immutable
+  generation: Int! @constraint(expr: "value >= 1")
+  streamRevision: Int! @constraint(expr: "value >= 1")
+  current: JSON! @sensitive
+  contentHash: String!
+  readiness: PlusReadiness!
+}
+
+type PlusBeliefHeadDeployment @linkType(from:"PlusBeliefHead",to:"PlusDeployment",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusBeliefHeadEpisode @linkType(from:"PlusBeliefHead",to:"PlusEpisode",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusBeliefHeadCurrent @linkType(from:"PlusBeliefHead",to:"PlusBeliefSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusBeliefAuthorization @linkType(from:"PlusBeliefSnapshot",to:"PlusReplayAuthorization",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusBeliefSelection @linkType(from:"PlusBeliefSnapshot",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusBeliefRuleSpecification @linkType(from:"PlusBeliefSnapshot",to:"PlusRuleSpecification",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusBeliefPrevious @linkType(from:"PlusBeliefSnapshot",to:"PlusBeliefSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+
+type PlusScenarioRun @objectType {
+  id: ID! @primary
+  scenarioKey: String! @unique @immutable
+  classification: PlusClassification! @immutable
+  plans: JSON! @immutable @sensitive
+  predictions: JSON! @immutable @sensitive
+  utilityVersion: String! @immutable
+  contentHash: String! @immutable
+  readiness: PlusReadiness!
+}
+
+# Scenario utility is the approved definition's utility, not another mutable table.
+type PlusScenarioDefinition @linkType(from:"PlusScenarioRun",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusScenarioRelease @linkType(from:"PlusScenarioRun",to:"PlusModelRelease",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusScenarioSelection @linkType(from:"PlusScenarioRun",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+
+type PlusActionRequest @objectType {
+  id: ID! @primary
+  requestKey: String! @unique @immutable
+  requestHash: String! @immutable
+  actionName: String! @immutable
+  typedParams: JSON! @immutable @sensitive
+  readSet: JSON! @immutable @sensitive
+  submittedBy: String! @immutable
+  submittedAt: DateTime! @immutable
+  status: PlusRequestStatus!
+  executionReceipt: JSON @sensitive
+}
+
+type PlusActionDecision @objectType {
+  id: ID! @primary
+  decisionKey: String! @unique @immutable
+  requestHash: String! @immutable
+  inputVersion: Int! @immutable
+  contentHash: String! @immutable
+  decision: PlusDecision! @immutable
+  decidedBy: String! @immutable
+  decidedAt: DateTime! @immutable
+  reason: String! @immutable @sensitive
+}
+
+enum PlusDataPartition { TRAIN VALIDATION FINAL_EVAL ONLINE }
+
+# Tenant-wide, immutable partition protocol. No per-definition reset or public edit action.
+type PlusPartitionPolicy @objectType {
+  id: ID! @primary
+  policyKey: String! @unique @immutable
+  policyHash: String! @immutable
+  protocol: JSON! @immutable @sensitive
+  createdBy: String! @immutable
+}
+
+type PlusPartitionAssignment @objectType {
+  id: ID! @primary
+  identityKey: String! @unique @immutable
+  identityKind: String! @immutable
+  partition: PlusDataPartition! @immutable
+  policyHash: String! @immutable
+  contentHash: String! @immutable
+}
+
+type PlusPartitionReservation @objectType {
+  id: ID! @primary
+  reservationKey: String! @unique @immutable
+  snapshotId: String! @immutable
+  inputHash: String! @immutable
+  classification: PlusClassification! @immutable
+  partition: PlusDataPartition! @immutable
+  policyHash: String! @immutable
+  identityKeys: JSON! @immutable @sensitive
+  groupHash: String! @immutable
+  contentHash: String! @immutable
+  createdBy: String! @immutable
+  reservedAt: DateTime! @immutable
+}
+
+type PlusFeedback @objectType {
+  id: ID! @primary
+  feedbackKey: String! @unique @immutable
+  sampleKey: String! @immutable
+  payload: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  proposedBy: String! @immutable
+  proposedAt: DateTime! @immutable
+  status: PlusRequestStatus!
+  readiness: PlusReadiness!
+  decidedBy: String
+  decidedAt: DateTime
+  decisionReason: String @sensitive
+  decisionHash: String
+}
+type PlusFeedbackInput @linkType(from:"PlusFeedback",to:"PlusInputSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusFeedbackLabelSnapshot @linkType(from:"PlusFeedback",to:"PlusInputSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusFeedbackSource @linkType(from:"PlusFeedback",to:"PlusEvent",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusFeedbackPartition @linkType(from:"PlusFeedback",to:"PlusPartitionReservation",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+type PlusPartitionAssignmentPolicy @linkType(from:"PlusPartitionAssignment",to:"PlusPartitionPolicy",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusPartitionReservationInput @linkType(from:"PlusPartitionReservation",to:"PlusInputSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusPartitionReservationAssignment @linkType(from:"PlusPartitionReservation",to:"PlusPartitionAssignment",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+type PlusCohort @objectType {
+  id: ID! @primary
+  cohortKey: String! @unique @immutable
+  protocolKey: String! @immutable
+  payload: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  proposedBy: String! @immutable
+  proposedAt: DateTime! @immutable
+  status: PlusRequestStatus!
+  readiness: PlusReadiness!
+  decidedBy: String
+  decidedAt: DateTime
+  decisionReason: String @sensitive
+  decisionHash: String
+}
+type PlusCohortInput @linkType(from:"PlusCohort",to:"PlusInputSnapshot",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusDatasetCohort @linkType(from:"PlusDatasetRevision",to:"PlusCohort",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDatasetFeedback @linkType(from:"PlusDatasetRevision",to:"PlusFeedback",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+type PlusDatasetRevision @objectType {
+  id: ID! @primary
+  datasetKey: String! @unique @immutable
+  classification: PlusClassification! @immutable
+  sourceManifest: JSON! @immutable @sensitive
+  partitionManifest: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  protocolHash: String! @immutable
+  createdBy: String! @immutable
+  readiness: PlusReadiness!
+}
+
+type PlusModelRelease @objectType {
+  id: ID! @primary
+  releaseKey: String! @unique @immutable
+  estimatorId: String! @immutable
+  updateKind: String! @immutable
+  classification: PlusClassification! @immutable
+  artifactHash: String! @immutable
+  artifactKey: String! @immutable
+  consumedSources: JSON! @immutable @sensitive
+  evaluation: JSON! @immutable @sensitive
+  dependencyHash: String! @immutable
+  status: PlusReleaseStatus!
+  createdBy: String! @immutable
+  approvedBy: String
+}
+
+type PlusExecution @objectType {
+  id: ID! @primary
+  executionKey: String! @unique @immutable
+  kind: String! @immutable
+  inputReadSet: JSON! @immutable @sensitive
+  principalId: String! @immutable
+  status: PlusExecutionStatus!
+  attempts: Int! @constraint(expr: "value >= 0")
+  leaseToken: String @sensitive
+  leaseUntil: DateTime
+  resultReference: JSON @sensitive
+  errorCode: String
+}
+
+# Conservative authorization-to-dispatch record, NOT a completed model-training claim.
+type PlusExecutionBeliefInput @linkType(from:"PlusExecution",to:"PlusInputSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionReplayAuthorization @linkType(from:"PlusExecution",to:"PlusReplayAuthorization",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionBeliefEpisode @linkType(from:"PlusExecution",to:"PlusEpisode",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionBeliefResult @linkType(from:"PlusExecution",to:"PlusBeliefSnapshot",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionSelectionDecision @linkType(from:"PlusExecution",to:"PlusModelDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionSelectionResult @linkType(from:"PlusExecution",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionEvaluationProtocol @linkType(from:"PlusExecution",to:"PlusEvaluationProtocol",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionEvaluationFit @linkType(from:"PlusExecution",to:"PlusExecution",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionEvaluationResult @linkType(from:"PlusExecution",to:"PlusModelEvaluation",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionDecisionEvaluation @linkType(from:"PlusExecution",to:"PlusModelEvaluation",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionDecisionResult @linkType(from:"PlusExecution",to:"PlusModelDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionActionRequest @linkType(from:"PlusExecution",to:"PlusActionRequest",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionActionDecision @linkType(from:"PlusExecution",to:"PlusActionDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionActionResult @linkType(from:"PlusExecution",to:"PlusActionRequest",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionTriggerOutbox @linkType(from:"PlusExecution",to:"PlusOutbox",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+type PlusDataExposure @objectType {
+  id: ID! @primary
+  exposureKey: String! @unique @immutable
+  purpose: String! @immutable
+  phase: String! @immutable
+  datasetHash: String! @immutable
+  workerId: String! @immutable
+  attempt: Int! @immutable
+  authorizedAt: DateTime! @immutable
+  sourceManifest: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+}
+# Immutable, bounded model payload. A stored artifact is not an approved release.
+type PlusModelArtifact @objectType {
+  id: ID! @primary
+  artifactKey: String! @unique @immutable
+  contentHash: String! @immutable
+  payload: JSON! @immutable @sensitive
+  definitionHash: String! @immutable
+  recipeHash: String! @immutable
+  createdBy: String! @immutable
+  createdAt: DateTime! @immutable
+}
+enum PlusRecipeStatus { DRAFT APPROVED REJECTED REVOKED }
+type PlusModelRecipe @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  recipeKey: String! @immutable
+  revision: Int! @immutable
+  definitionKey: String! @immutable
+  definitionHash: String! @immutable
+  definitionReference: JSON! @immutable
+  engineId: String! @immutable
+  recipeHash: String! @unique @immutable
+  payload: JSON! @immutable @sensitive
+  policyHash: String! @immutable
+  submittedBy: String! @immutable
+  submittedAt: DateTime! @immutable
+  proposalHash: String! @immutable
+  status: PlusRecipeStatus!
+  decision: JSON @sensitive
+  decisionHash: String
+  revocation: JSON @sensitive
+  revocationHash: String
+}
+type PlusRecipeDefinition @linkType(from:"PlusModelRecipe",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusRecipeRuleSpecification @linkType(from:"PlusModelRecipe",to:"PlusRuleSpecification",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusRecipeComponentDecision @linkType(from:"PlusModelRecipe",to:"PlusModelDecision",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+# Exact reviewed FIT scope, not a job, dataset, recipe approval or model release.
+type PlusComputeAuthorization @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  authorizationKey: String! @immutable
+  revision: Int! @immutable
+  submittedBy: String! @immutable
+  submittedAt: DateTime! @immutable
+  payload: JSON! @immutable @sensitive
+  proposalHash: String! @immutable
+  status: PlusRecipeStatus!
+  decision: JSON @sensitive
+  decisionHash: String
+  revocation: JSON @sensitive
+  revocationHash: String
+}
+type PlusComputeAuthorizationDataset @linkType(from:"PlusComputeAuthorization",to:"PlusDatasetRevision",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusComputeAuthorizationRecipe @linkType(from:"PlusComputeAuthorization",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionComputeAuthorization @linkType(from:"PlusExecution",to:"PlusComputeAuthorization",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReleaseComputeAuthorization @linkType(from:"PlusModelRelease",to:"PlusComputeAuthorization",cardinality:MANY_TO_ONE) {id:ID! @primary}
+# Prospective evaluation contract. Approval authorizes this test, not a model release.
+type PlusEvaluationProtocol @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  protocolKey: String! @immutable
+  revision: Int! @immutable
+  evaluatorId: String! @immutable
+  payload: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  proposedBy: String! @immutable
+  proposedAt: DateTime! @immutable
+  status: PlusRecipeStatus!
+  readiness: PlusReadiness!
+  decision: JSON @sensitive
+  decisionHash: String
+  revocation: JSON @sensitive
+  revocationHash: String
+}
+type PlusEvaluationProtocolRecipe @linkType(from:"PlusEvaluationProtocol",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationProtocolCohort @linkType(from:"PlusEvaluationProtocol",to:"PlusCohort",cardinality:MANY_TO_MANY) {id:ID! @primary}
+# Actual scores, separate from immutable FIT creation receipts and model approval.
+type PlusModelEvaluation @objectType {
+  id: ID! @primary
+  evaluationKey: String! @unique @immutable
+  protocolKey: String! @immutable
+  evaluatorId: String! @immutable
+  classification: PlusClassification! @immutable
+  inputReadSet: JSON! @immutable @sensitive
+  result: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  createdBy: String! @immutable
+  createdAt: DateTime! @immutable
+  readiness: PlusReadiness!
+}
+type PlusModelEvaluationProtocol @linkType(from:"PlusModelEvaluation",to:"PlusEvaluationProtocol",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusModelEvaluationRelease @linkType(from:"PlusModelEvaluation",to:"PlusModelRelease",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusModelEvaluationExecution @linkType(from:"PlusModelEvaluation",to:"PlusExecution",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusModelEvaluationRecipe @linkType(from:"PlusModelEvaluation",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusModelEvaluationTraining @linkType(from:"PlusModelEvaluation",to:"PlusDatasetRevision",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusModelEvaluationValidation @linkType(from:"PlusModelEvaluation",to:"PlusDatasetRevision",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusModelEvaluationInput @linkType(from:"PlusModelEvaluation",to:"PlusInputSnapshot",cardinality:MANY_TO_MANY) {id:ID! @primary}
+# Independent admission decision. It does not rewrite FIT or activate a deployment.
+type PlusModelDecision @objectType {
+  id: ID! @primary
+  decisionKey: String! @unique @immutable
+  policyKey: String! @immutable
+  decision: PlusDecision! @immutable
+  reason: String! @immutable @sensitive
+  policy: JSON! @immutable @sensitive
+  inputReadSet: JSON! @immutable @sensitive
+  createdBy: String! @immutable
+  createdAt: DateTime! @immutable
+  contentHash: String! @immutable
+  readiness: PlusReadiness!
+  revocation: JSON @sensitive
+  revocationHash: String
+}
+type PlusModelDecisionEvaluation @linkType(from:"PlusModelDecision",to:"PlusModelEvaluation",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusModelDecisionRelease @linkType(from:"PlusModelDecision",to:"PlusModelRelease",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusModelDecisionRecipe @linkType(from:"PlusModelDecision",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExecutionRecipe @linkType(from:"PlusExecution",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReleaseRecipe @linkType(from:"PlusModelRelease",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReleaseArtifact @linkType(from:"PlusModelRelease",to:"PlusModelArtifact",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReleaseExecution @linkType(from:"PlusModelRelease",to:"PlusExecution",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReleaseExposure @linkType(from:"PlusModelRelease",to:"PlusDataExposure",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReleaseIdentity @linkType(from:"PlusModelRelease",to:"PlusPartitionAssignment",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusExecutionDataset @linkType(from:"PlusExecution",to:"PlusDatasetRevision",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusExposureExecution @linkType(from:"PlusDataExposure",to:"PlusExecution",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusExposureSource @linkType(from:"PlusDataExposure",to:"PlusEvent",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusExposureIdentity @linkType(from:"PlusDataExposure",to:"PlusPartitionAssignment",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+type PlusDeployment @objectType {
+  id: ID! @primary
+  deploymentKey: String! @unique @immutable
+  definitionHash: String! @immutable
+  scopeKey: String! @immutable
+  releaseKey: String!
+  streamCursor: Int! @constraint(expr: "value >= 0")
+  readiness: PlusReadiness!
+  controlKey: String @immutable
+  generation: Int @constraint(expr: "value >= 1")
+  head: JSON @sensitive
+  headHash: String
+}
+# Immutable selection history. Old headless placeholders are not usable deployments.
+type PlusDeploymentRevision @objectType {
+  id: ID! @primary
+  revisionKey: String! @unique @immutable
+  deploymentKey: String! @immutable
+  generation: Int! @immutable
+  requestHash: String! @immutable
+  payload: JSON! @immutable @sensitive
+  createdBy: String! @immutable
+  createdAt: DateTime! @immutable
+  contentHash: String! @immutable
+}
+type PlusDeploymentDecision @linkType(from:"PlusDeployment",to:"PlusModelDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDeploymentHead @linkType(from:"PlusDeployment",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDeploymentRevisionOwner @linkType(from:"PlusDeploymentRevision",to:"PlusDeployment",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDeploymentRevisionDecision @linkType(from:"PlusDeploymentRevision",to:"PlusModelDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDeploymentRevisionPrevious @linkType(from:"PlusDeploymentRevision",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDeploymentRevisionRelease @linkType(from:"PlusDeploymentRevision",to:"PlusModelRelease",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusDeploymentRevisionDefinition @linkType(from:"PlusDeploymentRevision",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+
+# Explicit consent to replay one currently selected model under an approved clock.
+# Prospective comparison references stay attached to immutable selection history,
+# not to a second active-model pointer. Training members remain individually linked.
+type PlusEvaluationReferenceDeployment @linkType(from:"PlusEvaluationProtocol",to:"PlusDeployment",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceSelection @linkType(from:"PlusEvaluationProtocol",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceDecision @linkType(from:"PlusEvaluationProtocol",to:"PlusModelDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceRelease @linkType(from:"PlusEvaluationProtocol",to:"PlusModelRelease",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceDefinition @linkType(from:"PlusEvaluationProtocol",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceRecipe @linkType(from:"PlusEvaluationProtocol",to:"PlusModelRecipe",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceExecution @linkType(from:"PlusEvaluationProtocol",to:"PlusExecution",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusEvaluationReferenceTraining @linkType(from:"PlusEvaluationProtocol",to:"PlusDatasetRevision",cardinality:MANY_TO_MANY) {id:ID! @primary}
+
+# Explicit consent to replay one currently selected model under an approved clock.
+# Evaluation approval alone never creates this authorization or a current belief.
+type PlusReplayAuthorization @objectType {
+  id: ID! @primary
+  authorizationKey: String! @unique @immutable
+  controlKey: String! @immutable
+  requestHash: String! @immutable
+  payload: JSON! @immutable @sensitive
+  createdBy: String! @immutable
+  createdAt: DateTime! @immutable
+  contentHash: String! @immutable
+  readiness: PlusReadiness!
+  revocation: JSON @sensitive
+  revocationHash: String
+}
+
+type PlusReplayDeployment @linkType(from:"PlusReplayAuthorization",to:"PlusDeployment",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReplaySelection @linkType(from:"PlusReplayAuthorization",to:"PlusDeploymentRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReplayDecision @linkType(from:"PlusReplayAuthorization",to:"PlusModelDecision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReplayProtocol @linkType(from:"PlusReplayAuthorization",to:"PlusEvaluationProtocol",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReplayRelease @linkType(from:"PlusReplayAuthorization",to:"PlusModelRelease",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusReplayDefinition @linkType(from:"PlusReplayAuthorization",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+
+# Internal delivery metadata, not a second business fact store or public action.
+type PlusOutbox @objectType {
+  id: ID! @primary
+  deliveryKey: String! @unique @immutable
+  actionId: String! @immutable
+  envelope: JSON! @immutable @sensitive
+  contentHash: String! @immutable
+  createdAt: DateTime! @immutable
+  status: PlusOutboxStatus!
+  attempts: Int! @constraint(expr: "value >= 0")
+  leaseToken: String @sensitive
+  leaseUntil: DateTime
+  deliveredAt: DateTime
+  errorCode: String
+}
+
+type PlusEpisodeDefinition @linkType(from:"PlusEpisode",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) { id: ID! @primary }
+# A native source can be reused by multiple episode windows/definitions; eligibility deduplication is separate.
+type PlusEpisodeEvent @linkType(from:"PlusEpisode",to:"PlusEvent",cardinality:MANY_TO_MANY) { id: ID! @primary }
+type PlusEventSupersedes @linkType(from:"PlusEvent",to:"PlusEvent",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusSnapshotEpisode @linkType(from:"PlusInputSnapshot",to:"PlusEpisode",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusBeliefInput @linkType(from:"PlusBeliefSnapshot",to:"PlusInputSnapshot",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusBeliefRelease @linkType(from:"PlusBeliefSnapshot",to:"PlusModelRelease",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusScenarioBelief @linkType(from:"PlusScenarioRun",to:"PlusBeliefSnapshot",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusRequestScenario @linkType(from:"PlusActionRequest",to:"PlusScenarioRun",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusRequestDecision @linkType(from:"PlusActionRequest",to:"PlusActionDecision",cardinality:ONE_TO_MANY) { id: ID! @primary }
+type PlusReleaseDataset @linkType(from:"PlusModelRelease",to:"PlusDatasetRevision",cardinality:MANY_TO_MANY) { id: ID! @primary }
+type PlusDeploymentRelease @linkType(from:"PlusDeployment",to:"PlusModelRelease",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusDeploymentDefinition @linkType(from:"PlusDeployment",to:"PlusDefinitionRevision",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusOntologyReview @linkType(from:"PlusOntologyRevision",to:"PlusOntologyDecision",cardinality:ONE_TO_MANY) { id: ID! @primary }
+type PlusOntologyCurrent @linkType(from:"PlusOntologyHead",to:"PlusOntologyRevision",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusDefinitionOntology @linkType(from:"PlusDefinitionRevision",to:"PlusOntologyRevision",cardinality:MANY_TO_ONE) { id: ID! @primary }
+type PlusStreamEpisode @linkType(from:"PlusStreamRevision",to:"PlusEpisode",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusStreamEvent @linkType(from:"PlusStreamRevision",to:"PlusEvent",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusInputStream @linkType(from:"PlusInputSnapshot",to:"PlusStreamRevision",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusSourceChangeEpisode @linkType(from:"PlusSourceChange",to:"PlusEpisode",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusSourceChangeTarget @linkType(from:"PlusSourceChange",to:"PlusEvent",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusSourceChangeReplacement @linkType(from:"PlusSourceChange",to:"PlusEvent",cardinality:MANY_TO_ONE) {id:ID! @primary}
+type PlusStreamSourceChange @linkType(from:"PlusStreamRevision",to:"PlusSourceChange",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusDatasetSource @linkType(from:"PlusDatasetRevision",to:"PlusEvent",cardinality:MANY_TO_MANY) {id:ID! @primary}
+type PlusSourceChangeInvalidates @linkType(from:"PlusSourceChange",to:"PlusEvent",cardinality:MANY_TO_MANY) {id:ID! @primary}

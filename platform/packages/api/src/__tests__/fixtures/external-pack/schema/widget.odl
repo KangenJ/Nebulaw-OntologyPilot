@@ -1,0 +1,18 @@
+extend schema @namespace(name: "test.external", version: "0.1.0")
+
+type Widget @objectType {
+  id: ID! @primary
+  serialNumber: String @unique @indexed
+  name: String! @searchable
+  status: WidgetStatus!
+}
+
+enum WidgetStatus {
+  ACTIVE
+  INACTIVE
+  RETIRED
+}
+
+type BelongsTo @linkType(from: "Widget", to: "Widget", cardinality: MANY_TO_ONE) {
+  id: ID! @primary
+}

@@ -1,0 +1,43 @@
+# actions/assign-alert-to-case.yaml
+action: AssignAlertToCase
+version: 1
+reversible: false
+
+preconditions:
+  - expr: "alert.status == 'OPEN' || alert.status == 'INVESTIGATING'"
+    error: "Only open or investigating alerts can be assigned to a case"
+  - expr: "investigationCase.status == 'OPEN' || investigationCase.status == 'UNDER_REVIEW'"
+    error: "Case must be open or under review to accept alerts"
+  - expr: "actor.hasRole('compliance_analyst') || actor.hasRole('compliance_officer')"
+    error: "Only compliance analysts or officers can assign alerts"
+
+effects:
+  - type: updateObject
+    target: "alert"
+    set:
+      status: "INVESTIGATING"
+
+  - type: updateObject
+    target: "investigationCase"
+    set:
+      status: "UNDER_REVIEW"
+
+  - type: createLink
+    linkType: "AlertCase"
+    from: "alert"
+    to: "investigationCase"
+    properties:
+      assignedDate: "now"
+      assignedBy: "actor.id"
+
+sideEffects:
+  - name: emitAlertAssignedEvent
+    type: event
+    config:
+      type: "aml.alert.assigned"
+      data:
+        alertNumber: "alert.alertNumber"
+        caseNumber: "investigationCase.caseNumber"
+
+rollback:
+  onSideEffectFailure: LOG_AND_CONTINUE

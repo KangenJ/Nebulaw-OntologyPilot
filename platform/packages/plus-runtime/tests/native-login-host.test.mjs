@@ -1,0 +1,58 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {createHash,randomBytes} from 'node:crypto';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {NativeOntologyCatalog,buildOntologyBundle,ontologyStorageSchema} from '../dist/index.js';
+import {createNativeStorage} from '../../../apps/lwm-demo/src/native-storage.mjs';
+import {startPlusControlServer} from '../../../../ops/plus-v2/control-server.mjs';
+import {startNativeWorkbenchServer} from '../../../../ops/plus-v2/workbench-server.mjs';
+import {loginUiFixture} from '../../../apps/lwm-demo/tests/native-login-fixture.mjs';
+
+// Actual file identity, native SQLite, control HTTP and gateway. Only DOM is an
+// adapter. Temporary synthetic credentials never touch deployment/user files.
+test('shipped login handles actual private identity lifecycle, configuration failure and host restart',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'plus-native-login-')),dbPath=join(dir,'platform.sqlite'),authPath=join(dir,'auth.json'),policyPath=join(dir,'policy.json');
+  const tenantId='login-test',principal={id:'reader',tenantId,roles:['viewer']};
+  const token=randomBytes(32).toString('hex'),nextToken=randomBytes(32).toString('hex');
+  const hash=value=>createHash('sha256').update(value).digest('hex');
+  const record={...principal,tokenHash:hash(token),expiresAt:new Date(Date.now()+600000).toISOString()};
+  let records=[structuredClone(record)],host,gateway,storage;
+  const save=()=>writeFileSync(authPath,JSON.stringify(records),{mode:0o600});save();
+  writeFileSync(policyPath,JSON.stringify({version:1,definitions:{}}),{mode:0o600});
+  t.after(async()=>{await gateway?.close();await host?.close();storage?.close();rmSync(dir,{recursive:true,force:true});});
+  storage=createNativeStorage(dbPath);
+  const metadata=readFileSync(new URL('../../../domain-packs/plus-core/schema/metadata.odl',import.meta.url),'utf8');
+  const baseline={odl:metadata+'\ntype WorkItem @objectType { id: ID! @primary title: String! }',manifests:{},disabledActions:[]};
+  await storage.applySchema({tenantId},ontologyStorageSchema(buildOntologyBundle(baseline),1));
+  const catalog=new NativeOntologyCatalog({storage,tenantId,authorize:async()=>true});
+  await catalog.adoptInstalledBaseline(baseline,{id:'fixture-owner',tenantId,roles:['model_owner']});
+  const start=async()=>{host=await startPlusControlServer({dbPath,authPath,policyPath,tenantId,workerIntervalMs:0});gateway=await startNativeWorkbenchServer({platformUrl:host.url});};
+  await start();
+  const statuses=[];
+  const f=loginUiFixture(t,async(path,options)=>{const r=await fetch(gateway.url+path,options);statuses.push({path,status:r.status});return r;});
+  const loggedOut=()=>{assert.equal(f.node('#workspace').hidden,true);assert.equal(f.node('#content').innerHTML,'');assert.equal(f.node('#login-error').hidden,false);};
+  await f.login(token);assert.equal(f.node('#workspace').hidden,false);assert.equal(f.node('#login-form input[name=token]').value,'');
+  assert.equal(statuses.find(x=>x.path==='/api/ontology').status,200);
+  const asset=await fetch(gateway.url+'/native-session.js');assert.equal(asset.status,200);assert.match(asset.headers.get('cache-control'),/no-store/);
+  assert.match(await asset.text(),/normalizeAccessToken/);
+  await f.login('incorrect-test-token');loggedOut();assert.equal(statuses.at(-1).status,401);
+  records[0].expiresAt='2000-01-01T00:00:00Z';save();await f.login(token);loggedOut();assert.equal(statuses.at(-1).status,401);
+  records=[structuredClone(record)];save();await f.login(token);assert.equal(f.node('#workspace').hidden,false);
+  records[0].disabled=true;save();f.node('#refresh').onclick();await f.settle();loggedOut();assert.equal(statuses.at(-1).status,401);
+  records=[structuredClone(record),{...record,tokenHash:hash(nextToken)}];save();
+  await f.login(nextToken);assert.equal(f.node('#workspace').hidden,false);
+  records[0].disabled=true;save();await f.login(token);loggedOut();await f.login(nextToken);assert.equal(f.node('#workspace').hidden,false);
+  records[1].tenantId='foreign';save();await f.login(nextToken);loggedOut();assert.equal(statuses.at(-1).status,403);assert.match(f.node('#login-error').textContent,/权限|租户/);
+  records[1].tenantId=tenantId;records[1].roles=[];save();await f.login(nextToken);
+  assert.equal(f.node('#workspace').hidden,false);assert.equal(statuses.at(-1).status,403);assert.match(f.node('#notice').textContent,/FORBIDDEN/);
+  writeFileSync(authPath,'PRIVATE_INVALID_CONFIGURATION',{mode:0o600});await f.login(nextToken);loggedOut();
+  assert.equal(statuses.at(-1).status,503);assert.match(f.node('#login-error').textContent,/服务|配置/);assert.doesNotMatch(f.node('#login-error').textContent,/PRIVATE_INVALID/);
+  records[1].roles=['viewer'];save();await host.close();host=null;
+  await f.login(nextToken);loggedOut();assert.equal(statuses.at(-1).status,500);assert.match(f.node('#login-error').textContent,/服务/);
+  await gateway.close();gateway=null;await start();await f.login(nextToken);assert.equal(f.node('#workspace').hidden,false);
+  assert.equal((await catalog.read({id:'fixture-owner',tenantId,roles:['model_owner']})).bundle.contentHash,buildOntologyBundle(baseline).contentHash);
+  const uiText=[...['#login-error','#notice','#identity','#access-info'].map(s=>f.node(s).textContent)].join(' ');
+  assert.equal(uiText.includes(token)||uiText.includes(nextToken),false);
+});

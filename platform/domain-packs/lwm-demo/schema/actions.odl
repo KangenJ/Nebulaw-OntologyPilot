@@ -1,0 +1,55 @@
+extend schema @namespace(name: "lwm.demo", version: "0.1.0")
+
+type ApproveTransition @actionType(permission: "can_approve") {
+  proposal: TransitionProposal! @param
+  matter: Matter! @param
+  model: ModelVersion! @param
+  reviewNumber: String! @param
+  feedbackNumber: String! @param
+  reviewer: String! @param
+  note: String @param
+}
+
+type RejectTransition @actionType(permission: "can_reject") {
+  proposal: TransitionProposal! @param
+  model: ModelVersion! @param
+  reviewNumber: String! @param
+  feedbackNumber: String! @param
+  reviewer: String! @param
+  note: String! @param
+}
+
+type RequestEvidence @actionType(permission: "can_request_evidence") {
+  proposal: TransitionProposal! @param
+  matter: Matter! @param
+  taskNumber: String! @param
+  title: String! @param
+  assignee: String! @param
+  instructions: String! @param
+  priority: RiskBand! @param
+  dueAt: DateTime! @param
+}
+
+type CompleteInvestigationTask @actionType(permission: "can_complete") {
+  task: InvestigationTask! @param
+  proposal: TransitionProposal! @param
+}
+
+type PromoteModel @actionType(permission: "can_promote") {
+  candidate: ModelVersion! @param
+  activeModel: ModelVersion! @param
+  approver: String! @param
+}
+
+type RollbackModel @actionType(permission: "can_rollback") {
+  activeModel: ModelVersion! @param
+  rollbackModel: ModelVersion! @param
+  approver: String! @param
+  reason: String! @param
+}
+
+type HoldModel @actionType(permission: "can_promote") {
+  candidate: ModelVersion! @param
+  approver: String! @param
+  reason: String! @param
+}

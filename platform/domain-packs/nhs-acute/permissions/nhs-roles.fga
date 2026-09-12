@@ -1,0 +1,50 @@
+model
+  schema 1.1
+
+type user
+
+type ward
+  relations
+    define assigned: [user]
+    define porter: [user]
+    define viewer: assigned
+    define editor: assigned
+
+type patient
+  relations
+    define admitted_to: [ward]
+    define viewer: viewer from admitted_to
+    define editor: editor from admitted_to
+    define clinician: [user]
+    define nurse_in_charge: [user]
+    define admin: [user]
+    define can_admit: clinician or nurse_in_charge or admin
+    define can_discharge: clinician or nurse_in_charge
+    define can_transfer: clinician or nurse_in_charge
+
+type bed
+  relations
+    define bed_in_ward: [ward]
+    define viewer: viewer from bed_in_ward
+    define editor: editor from bed_in_ward
+    define can_clean: editor or porter from bed_in_ward
+
+type consultant
+  relations
+    define viewer: [user]
+
+type staff
+  relations
+    define viewer: [user]
+
+type discharge_record
+  relations
+    define clinician: [user]
+    define nurse_in_charge: [user]
+    define viewer: clinician or nurse_in_charge
+
+type transfer
+  relations
+    define clinician: [user]
+    define nurse_in_charge: [user]
+    define viewer: clinician or nurse_in_charge
